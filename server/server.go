@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/dmitrydi/url_shortener/storage"
+	"github.com/go-chi/chi/v5"
 )
 
 func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
@@ -34,7 +35,7 @@ func MakeGetHandler(st storage.URLStorage) http.HandlerFunc {
 	}
 }
 
-func PutHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
+func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -62,8 +63,18 @@ func PutHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
 	w.Write([]byte(shortURL))
 }
 
-func MakePutHandler(st storage.URLStorage) http.HandlerFunc {
+func MakePostHandler(st storage.URLStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		PutHandler(w, r, st)
+		PostHandler(w, r, st)
 	}
+}
+
+func MakeRouter(host string) chi.Router {
+	s := storage.NewBasicStorage(host)
+	r := chi.NewRouter()
+	getHandler := MakeGetHandler(s)
+	postHandler := MakePostHandler(s)
+	r.Get(`/{path}`, getHandler)
+	r.Post(`/`, postHandler)
+	return r
 }

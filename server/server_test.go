@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPutHandler(t *testing.T) {
+func TestPostHandler(t *testing.T) {
 	prefix := "http://localhost:8080/"
 	storage := storage.NewBasicStorage(prefix)
 	type want struct {
@@ -59,7 +59,7 @@ func TestPutHandler(t *testing.T) {
 			request := httptest.NewRequest(test.method, "/", bytes.NewBuffer([]byte(test.initURL)))
 			// создаём новый Recorder
 			w := httptest.NewRecorder()
-			PutHandler(w, request, storage)
+			PostHandler(w, request, storage)
 
 			res := w.Result()
 			// проверяем код ответа
@@ -122,7 +122,7 @@ func TestGetHandler(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			putRequest := httptest.NewRequest(test.putMethod, "/", bytes.NewBuffer([]byte(test.initURL)))
 			w := httptest.NewRecorder()
-			PutHandler(w, putRequest, stor)
+			PostHandler(w, putRequest, stor)
 			putRes := w.Result()
 			assert.Equal(t, test.want.putCode, putRes.StatusCode)
 			if putRes.StatusCode == http.StatusCreated {
@@ -159,4 +159,47 @@ func TestGetHandler(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testRequest(t *testing.T, ts *httptest.Server, method,
+	path, body string) (*http.Response, string) {
+	req, err := http.NewRequest(method, ts.URL+path, strings.NewReader(body))
+	require.NoError(t, err)
+	cli := ts.Client()
+
+	cli.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	return resp, string(respBody)
+}
+
+func TestRouter(t *testing.T) {
+	hostPrefix := "http://localhost:8080/"
+	initURL := "www.ya.ru"
+	// l, err := net.Listen("tcp", "localhost:8080")
+	// require.NoError(t, err)
+
+	// tserver := httptest.NewUnstartedServer(MakeRouter(hostPrefix))
+	// tserver.Listener.Close()
+	// tserver.Listener = l
+	tserver := httptest.NewServer(MakeRouter(hostPrefix))
+	defer tserver.Close()
+	//tserver.Start()
+	postResp, postBody := testRequest(t, tserver, http.MethodPost, "/", initURL)
+	defer postResp.Body.Close()
+	assert.Equal(t, postResp.StatusCode, http.StatusCreated)
+	path := strings.TrimPrefix(postBody, hostPrefix)
+	assert.Equal(t, len([]rune(path)), 8)
+	getResp, _ := testRequest(t, tserver, http.MethodGet, "/"+path, "")
+	defer getResp.Body.Close()
+	assert.Equal(t, http.StatusTemporaryRedirect, getResp.StatusCode)
+	assert.Equal(t, initURL, getResp.Header.Get("Location"))
+
 }
