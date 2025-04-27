@@ -33,7 +33,7 @@ func MakeBasicStorage(rootPrefix string) BasicStorage {
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const shortURLLen = 8
 
-func makeRandomString(n int) string {
+func MakeRandomString(n int) string {
 	b := make([]byte, n)
 	for i := range b {
 		b[i] = letterBytes[rand.Intn(len(letterBytes))]
@@ -44,7 +44,7 @@ func makeRandomString(n int) string {
 func (storage *BasicStorage) Put(intiURL string) (string, error) {
 	var randURL string
 	for {
-		randURL = makeRandomString(shortURLLen)
+		randURL = MakeRandomString(shortURLLen)
 		_, ok := storage.data[randURL]
 		if !ok {
 			break
@@ -64,4 +64,8 @@ func (storage *BasicStorage) Get(shortURL string) (string, error) {
 
 func (storage *BasicStorage) RemovePrefix(url string) string {
 	return strings.TrimPrefix(url, storage.rootPrefix)
+}
+
+func (storage *BasicStorage) GetURLSize() int {
+	return shortURLLen
 }
