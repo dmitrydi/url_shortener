@@ -1,13 +1,16 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 
+	"github.com/dmitrydi/url_shortener/config"
 	"github.com/dmitrydi/url_shortener/server"
 )
 
 func main() {
-	r := server.MakeRouter("http://localhost:8080/")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	flag.Parse()
+	r := server.MakeRouter(*config.URLPrefix)
+	log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
 }

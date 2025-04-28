@@ -18,6 +18,10 @@ type BasicStorage struct {
 
 func NewBasicStorage(rootPrefix string) *BasicStorage {
 	ret := new(BasicStorage)
+	ru := []rune(rootPrefix)
+	if string(ru[len(ru)-1]) != "/" {
+		rootPrefix += "/"
+	}
 	ret.rootPrefix = rootPrefix
 	ret.data = make(map[string]string)
 	return ret

@@ -183,12 +183,6 @@ func testRequest(t *testing.T, ts *httptest.Server, method,
 func TestRouter(t *testing.T) {
 	hostPrefix := "http://localhost:8080/"
 	initURL := "www.ya.ru"
-	// l, err := net.Listen("tcp", "localhost:8080")
-	// require.NoError(t, err)
-
-	// tserver := httptest.NewUnstartedServer(MakeRouter(hostPrefix))
-	// tserver.Listener.Close()
-	// tserver.Listener = l
 	tserver := httptest.NewServer(MakeRouter(hostPrefix))
 	defer tserver.Close()
 	//tserver.Start()
