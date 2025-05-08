@@ -1,14 +1,70 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/dmitrydi/url_shortener/internal/helpers"
 	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/go-chi/chi/v5"
 )
+
+const shortURLLen = 8
+
+type BasicStorage struct {
+	rootPrefix string
+	data       map[string]string
+}
+
+func NewBasicStorage(rootPrefix string) *BasicStorage {
+	ret := new(BasicStorage)
+	ru := []rune(rootPrefix)
+	if string(ru[len(ru)-1]) != "/" {
+		rootPrefix += "/"
+	}
+	ret.rootPrefix = rootPrefix
+	ret.data = make(map[string]string)
+	return ret
+}
+
+func MakeBasicStorage(rootPrefix string) BasicStorage {
+	var ret BasicStorage
+	ret.rootPrefix = rootPrefix
+	ret.data = make(map[string]string)
+	return ret
+}
+
+func (storage *BasicStorage) Put(initURL string) (string, error) {
+	var randURL string
+	for {
+		randURL = helpers.MakeRandomString(shortURLLen)
+		_, ok := storage.data[randURL]
+		if !ok {
+			break
+		}
+	}
+	storage.data[randURL] = initURL
+	return storage.rootPrefix + randURL, nil
+}
+
+func (storage *BasicStorage) Get(shortURL string) (string, error) {
+	val, ok := storage.data[shortURL]
+	if !ok {
+		return "", errors.New("url not exists")
+	}
+	return val, nil
+}
+
+func (storage *BasicStorage) RemovePrefix(url string) string {
+	return strings.TrimPrefix(url, storage.rootPrefix)
+}
+
+func (storage *BasicStorage) GetURLSize() int {
+	return shortURLLen
+}
 
 func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
 	if r.Method != http.MethodGet {
@@ -69,11 +125,8 @@ func MakePostHandler(st storage.URLStorage) http.HandlerFunc {
 	}
 }
 
-func MakeRouter(host string) chi.Router {
-	s := storage.NewBasicStorage(host)
+func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc) chi.Router {
 	r := chi.NewRouter()
-	getHandler := MakeGetHandler(s)
-	postHandler := MakePostHandler(s)
 	r.Get(`/{path}`, getHandler)
 	r.Post(`/`, postHandler)
 	return r

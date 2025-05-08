@@ -11,6 +11,9 @@ import (
 
 func main() {
 	flag.Parse()
-	r := server.MakeRouter(*config.URLPrefix)
+	s := server.NewBasicStorage(*config.URLPrefix)
+	getHandler := server.MakeGetHandler(s)
+	postHandler := server.MakePostHandler(s)
+	r := server.MakeRouter(getHandler, postHandler)
 	log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
 }

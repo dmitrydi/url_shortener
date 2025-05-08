@@ -1,16 +1,10 @@
-package storage
+package helpers
 
 import (
 	"math/rand"
 )
 
-type URLStorage interface {
-	Put(string) (string, error)
-	Get(string) (string, error)
-}
-
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-const shortURLLen = 8
 
 func MakeRandomString(n int) string {
 	b := make([]byte, n)
