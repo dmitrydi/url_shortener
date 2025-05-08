@@ -6,10 +6,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/dmitrydi/url_shortener/internal/helpers"
 	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 const shortURLLen = 8
@@ -122,6 +124,46 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 func MakePostHandler(st storage.URLStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		PostHandler(w, r, st)
+	}
+}
+
+type (
+	responseData struct {
+		status int
+		size   int
+	}
+
+	loggingResponseWriter struct {
+		http.ResponseWriter
+		responseData *responseData
+	}
+)
+
+func (r *loggingResponseWriter) Write(b []byte) (int, error) {
+	size, err := r.ResponseWriter.Write(b)
+	r.responseData.size += size
+	return size, err
+}
+
+func (r *loggingResponseWriter) WriteHeader(statusCode int) {
+	r.ResponseWriter.WriteHeader(statusCode)
+	r.responseData.status = statusCode
+}
+
+func LoggingHandler(h http.HandlerFunc, logger *zap.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sugar := logger.Sugar()
+		start := time.Now()
+		responseData := &responseData{status: 0, size: 0}
+		lw := loggingResponseWriter{ResponseWriter: w, responseData: responseData}
+		uri := r.RequestURI
+		method := r.Method
+		h(&lw, r)
+		duration := time.Since(start)
+		sugar.Infoln("uri", uri,
+			"method", method,
+			"status", responseData.status,
+			"duration", duration, "size", responseData.size)
 	}
 }
 
