@@ -17,6 +17,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer logger.Sync()
 	getHandler := server.LoggingHandler(server.MakeGetHandler(s), logger)
 	postHandler := server.LoggingHandler(server.MakePostHandler(s), logger)
 	r := server.MakeRouter(getHandler, postHandler)
