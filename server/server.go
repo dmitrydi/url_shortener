@@ -173,7 +173,7 @@ func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(resp.Result)))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respJSON)))
 	w.WriteHeader(http.StatusCreated)
 	w.Write(respJSON)
 }
