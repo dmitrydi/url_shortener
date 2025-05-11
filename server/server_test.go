@@ -192,9 +192,8 @@ func TestRouter(t *testing.T) {
 	hostPrefix := "http://localhost:8080/"
 	initURL := "www.ya.ru"
 	tstorage := NewBasicStorage(hostPrefix)
-	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage)))
+	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
 	defer tserver.Close()
-	//tserver.Start()
 	postResp, postBody := testRequest(t, tserver, http.MethodPost, "/", initURL)
 	defer postResp.Body.Close()
 	assert.Equal(t, postResp.StatusCode, http.StatusCreated, "expected successful creation")

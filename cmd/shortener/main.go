@@ -20,6 +20,7 @@ func main() {
 	defer logger.Sync()
 	getHandler := server.LoggingHandler(server.MakeGetHandler(s), logger)
 	postHandler := server.LoggingHandler(server.MakePostHandler(s), logger)
-	r := server.MakeRouter(getHandler, postHandler)
+	jsonHandler := server.LoggingHandler(server.MakeJSONHandler(s), logger)
+	r := server.MakeRouter(getHandler, postHandler, jsonHandler)
 	log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
 }
