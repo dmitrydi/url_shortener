@@ -2,12 +2,15 @@ package server
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/dmitrydi/url_shortener/storage"
@@ -255,6 +258,37 @@ func TestRouterJSONApi(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode, "bad response status")
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"), "bad response content type")
 
+	defer resp.Body.Close()
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(resp.Body)
+	require.NoError(t, err, "io.ReadAll error")
+	r := JSONResp{}
+	err = json.Unmarshal(buf.Bytes(), &r)
+	require.NoError(t, err, "json.Unmarshal")
+	assert.Equal(t, len(hostPrefix)+tstorage.GetURLSize(), len(r.Result), "invalid body size")
+}
+
+func TestRouterCompress(t *testing.T) {
+	hostPrefix := "http://localhost:8080/"
+	initURL := "www.ya.ru"
+	tstorage := NewBasicStorage(hostPrefix)
+	writerPool := &sync.Pool{
+		New: func() any {
+			writer, _ := gzip.NewWriterLevel(nil, gzip.BestSpeed)
+			return writer
+		},
+	}
+	getHandler := CompressHandler(MakeGetHandler(tstorage), writerPool)
+	postHandler := CompressHandler(MakePostHandler(tstorage), writerPool)
+	jsonHandler := CompressHandler(MakeJSONHandler(tstorage), writerPool)
+	tserver := httptest.NewServer(MakeRouter(getHandler, postHandler, jsonHandler))
+	defer tserver.Close()
+	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
+	resp, err := tserver.Client().Do(req)
+	require.NoError(t, err, "server error")
+	fmt.Println(resp)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode, "bad response status")
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"), "bad response content type")
 	defer resp.Body.Close()
 	var buf bytes.Buffer
 	_, err = buf.ReadFrom(resp.Body)

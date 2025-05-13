@@ -1,9 +1,11 @@
 package main
 
 import (
+	"compress/gzip"
 	"flag"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/dmitrydi/url_shortener/config"
 	"github.com/dmitrydi/url_shortener/server"
@@ -18,9 +20,15 @@ func main() {
 		log.Fatal(err)
 	}
 	defer logger.Sync()
+	writerPool := &sync.Pool{
+		New: func() any {
+			writer, _ := gzip.NewWriterLevel(nil, gzip.BestSpeed)
+			return writer
+		},
+	}
 	getHandler := server.LoggingHandler(server.MakeGetHandler(s), logger)
-	postHandler := server.LoggingHandler(server.MakePostHandler(s), logger)
-	jsonHandler := server.LoggingHandler(server.MakeJSONHandler(s), logger)
+	postHandler := server.LoggingHandler(server.CompressHandler(server.MakePostHandler(s), writerPool), logger)
+	jsonHandler := server.LoggingHandler(server.CompressHandler(server.MakeJSONHandler(s), writerPool), logger)
 	r := server.MakeRouter(getHandler, postHandler, jsonHandler)
 	log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
 }
