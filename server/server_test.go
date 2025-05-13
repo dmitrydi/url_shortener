@@ -172,10 +172,6 @@ func TestGetHandler(t *testing.T) {
 }
 
 func TestJSONHandler(t *testing.T) {
-	// jreq := JSONReq{"ya.ru"}
-	// bt, err := json.Marshal(jreq)
-	// require.NoError(t, err)
-	// req := httptest.NewRequest(http.MethodPost, "/api/shorten", bytes.NewBuffer(bt))
 	req := makeJSONRequest(http.MethodPost, "/api/shorten", "ya.ru")
 	req.Header.Set("Content-Type", "application/json")
 	prefix := "http://localhost:8080/"
