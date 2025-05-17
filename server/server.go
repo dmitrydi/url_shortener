@@ -1,33 +1,32 @@
 package server
 
 import (
-	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
-	"strings"
 	"sync"
-	"time"
+
+	"strings"
 
 	"github.com/dmitrydi/url_shortener/internal/helpers"
+	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
-
-const shortURLLen = 8
 
 // Storage
 
 type BasicStorage struct {
 	rootPrefix string
 	data       map[string]string
+	lastID     uint
+	persister  *storage.Persister
 }
 
-func NewBasicStorage(rootPrefix string) *BasicStorage {
+func NewBasicStorage(rootPrefix string, persistPath string) (*BasicStorage, error) {
 	ret := new(BasicStorage)
 	ru := []rune(rootPrefix)
 	if string(ru[len(ru)-1]) != "/" {
@@ -35,7 +34,19 @@ func NewBasicStorage(rootPrefix string) *BasicStorage {
 	}
 	ret.rootPrefix = rootPrefix
 	ret.data = make(map[string]string)
-	return ret
+	p, err := storage.NewPersister(persistPath)
+	if err != nil {
+		return ret, err
+	}
+	if p != nil {
+		lastID, err := p.Restore(ret)
+		if err != nil {
+			return ret, err
+		}
+		ret.lastID = lastID
+	}
+	ret.persister = p
+	return ret, nil
 }
 
 func MakeBasicStorage(rootPrefix string) BasicStorage {
@@ -45,33 +56,59 @@ func MakeBasicStorage(rootPrefix string) BasicStorage {
 	return ret
 }
 
-func (storage *BasicStorage) Put(initURL string) (string, error) {
+func (stor *BasicStorage) Put(initURL string) (string, error) {
 	var randURL string
 	for {
-		randURL = helpers.MakeRandomString(shortURLLen)
-		_, ok := storage.data[randURL]
+		randURL = helpers.MakeRandomString(storage.ShortURLLen)
+		_, ok := stor.data[randURL]
 		if !ok {
 			break
 		}
 	}
-	storage.data[randURL] = initURL
-	return storage.rootPrefix + randURL, nil
+	stor.data[randURL] = initURL
+	stor.lastID += 1
+	if stor.persister != nil {
+		stor.persister.Add(stor.lastID, randURL, initURL)
+	}
+
+	return stor.rootPrefix + randURL, nil
 }
 
-func (storage *BasicStorage) Get(shortURL string) (string, error) {
-	val, ok := storage.data[shortURL]
+func (stor *BasicStorage) Close() error {
+	return stor.persister.Close()
+}
+
+func (stor *BasicStorage) Get(shortURL string) (string, error) {
+	val, ok := stor.data[shortURL]
 	if !ok {
 		return "", errors.New("url not exists")
 	}
 	return val, nil
 }
 
-func (storage *BasicStorage) RemovePrefix(url string) string {
-	return strings.TrimPrefix(url, storage.rootPrefix)
+func (stor *BasicStorage) RemovePrefix(url string) string {
+	return strings.TrimPrefix(url, stor.rootPrefix)
 }
 
-func (storage *BasicStorage) GetURLSize() int {
-	return shortURLLen
+func (stor *BasicStorage) GetURLSize() int {
+	return storage.ShortURLLen
+}
+
+type DuplicateKeyError struct {
+	ExistingKey string
+}
+
+func (e *DuplicateKeyError) Error() string {
+	return e.ExistingKey
+}
+
+func (stor *BasicStorage) AddData(shortURL string, initURL string) error {
+	_, ok := stor.data[shortURL]
+	if ok {
+		return &DuplicateKeyError{ExistingKey: shortURL}
+	}
+	stor.data[shortURL] = initURL
+	return nil
 }
 
 // Get Handler
@@ -101,27 +138,26 @@ func MakeGetHandler(st storage.URLStorage) http.HandlerFunc {
 	}
 }
 
+type GHandler struct {
+	st storage.URLStorage
+}
+
 // Post Handler
 
 func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
+	defer r.Body.Close()
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	var reader io.Reader
-	if r.Header.Get("Content-Encoding") == "gzip" {
-		gz, err := gzip.NewReader(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		reader = gz
-		defer gz.Close()
-	} else {
-		reader = r.Body
+	reader, err := middleware.MakeDecompReader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	defer reader.Close()
+
 	body, err := io.ReadAll(reader)
-	defer r.Body.Close()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -159,31 +195,27 @@ type JSONResp struct {
 }
 
 func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
+	defer r.Body.Close()
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	var reader io.Reader
-	if r.Header.Get("Content-Encoding") == "gzip" {
-		gz, err := gzip.NewReader(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		reader = gz
-		defer gz.Close()
-	} else {
-		reader = r.Body
+	reader, err := middleware.MakeDecompReader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	defer reader.Close()
+
 	body, err := io.ReadAll(reader)
-	defer r.Body.Close()
+
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	var req = JSONReq{}
 	err = json.Unmarshal(body, &req)
-	if err != nil {
+	if err != nil || len(req.URL) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -210,97 +242,6 @@ func MakeJSONHandler(st storage.URLStorage) http.HandlerFunc {
 	}
 }
 
-// Logging Handler
-
-type (
-	responseData struct {
-		status int
-		size   int
-	}
-
-	loggingResponseWriter struct {
-		http.ResponseWriter
-		responseData *responseData
-	}
-)
-
-func (r *loggingResponseWriter) Write(b []byte) (int, error) {
-	size, err := r.ResponseWriter.Write(b)
-	r.responseData.size += size
-	return size, err
-}
-
-func (r *loggingResponseWriter) WriteHeader(statusCode int) {
-	r.ResponseWriter.WriteHeader(statusCode)
-	r.responseData.status = statusCode
-}
-
-func LoggingHandler(h http.HandlerFunc, logger *zap.Logger) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		sugar := logger.Sugar()
-		start := time.Now()
-		responseData := &responseData{status: 0, size: 0}
-		lw := loggingResponseWriter{ResponseWriter: w, responseData: responseData}
-		uri := r.RequestURI
-		method := r.Method
-		h(&lw, r)
-		duration := time.Since(start)
-		sugar.Infoln("uri", uri,
-			"method", method,
-			"status", responseData.status,
-			"duration", duration, "size", responseData.size)
-	}
-}
-
-// type gzipWriter struct {
-// 	http.ResponseWriter
-// 	Writer   io.Writer
-// 	Compress bool
-// }
-
-type customWriter struct {
-	http.ResponseWriter
-	Writer     io.Writer
-	Compress   bool
-	StatusCode int
-}
-
-func (w *customWriter) WriteHeader(statusCode int) {
-	fmt.Println("WriteHeader called with ", statusCode)
-	w.StatusCode = statusCode
-}
-
-func (w *customWriter) Write(b []byte) (int, error) {
-	fmt.Println("Writer status code ", w.StatusCode)
-	if !slices.Contains(compressTypes, w.ResponseWriter.Header().Get("Content-Type")) || len(b) < 1400 {
-		w.ResponseWriter.WriteHeader(w.StatusCode)
-		return w.ResponseWriter.Write(b)
-	}
-	w.Header().Del("Content-Length")
-	w.ResponseWriter.WriteHeader(w.StatusCode)
-	return w.Writer.Write(b)
-}
-
-var compressTypes = []string{"application/json", "text/html"}
-
-// func (w gzipWriter) Write(b []byte) (int, error) {
-// 	if !slices.Contains(compressTypes, w.ResponseWriter.Header().Get("Content-Type")) || !w.Compress || len(b) < 1400 {
-// 		return w.ResponseWriter.Write(b)
-// 	}
-// 	w.Header().Set("Content-Encoding", "gzip")
-// 	w.WriteHeader(http.StatusCreated)
-// 	return w.Writer.Write(b)
-// }
-
-func CompressHandler(h http.HandlerFunc, pl *sync.Pool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		gz := gzip.NewWriter(w)
-		defer gz.Close()
-		cw := customWriter{ResponseWriter: w, Writer: gz, Compress: strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"), StatusCode: 0}
-		h(&cw, r)
-	}
-}
-
 // Builder
 
 func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc) chi.Router {
@@ -308,5 +249,18 @@ func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonH
 	r.Get(`/{path}`, getHandler)
 	r.Post(`/api/shorten`, jsonHandler)
 	r.Post(`/`, postHandler)
+	return r
+}
+
+func MakeRouter2(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc, logger *zap.Logger, pl *sync.Pool) chi.Router {
+	r := chi.NewRouter()
+
+	r.Use(middleware.MakeLogHandler(logger))
+	r.Get(`/{path}`, getHandler)
+	r.Group(func(rt chi.Router) {
+		rt.Use(middleware.MakeCompressHandler(pl))
+		r.Post(`/api/shorten`, jsonHandler)
+		r.Post(`/`, postHandler)
+	})
 	return r
 }

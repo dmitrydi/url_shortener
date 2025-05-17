@@ -14,7 +14,11 @@ import (
 
 func main() {
 	flag.Parse()
-	s := server.NewBasicStorage(*config.URLPrefix)
+	s, err := server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
+	if err != nil {
+		log.Fatal("Could not initialize storage ", err.Error())
+	}
+	defer s.Close()
 	logger, err := zap.NewDevelopment()
 	if err != nil {
 		log.Fatal(err)
@@ -26,9 +30,10 @@ func main() {
 			return writer
 		},
 	}
-	getHandler := server.LoggingHandler(server.MakeGetHandler(s), logger)
-	postHandler := server.LoggingHandler(server.CompressHandler(server.MakePostHandler(s), writerPool), logger)
-	jsonHandler := server.LoggingHandler(server.CompressHandler(server.MakeJSONHandler(s), writerPool), logger)
-	r := server.MakeRouter(getHandler, postHandler, jsonHandler)
+	// getHandler := middleware.LoggingHandler(server.MakeGetHandler(s), logger)
+	// postHandler := middleware.LoggingHandler(middleware.CompressHandler(server.MakePostHandler(s), writerPool), logger)
+	// jsonHandler := middleware.LoggingHandler(middleware.CompressHandler(server.MakeJSONHandler(s), writerPool), logger)
+	// r := server.MakeRouter(getHandler, postHandler, jsonHandler)
+	r := server.MakeRouter2(server.MakeGetHandler(s), server.MakePostHandler(s), server.MakeJSONHandler(s), logger, writerPool)
 	log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
 }
