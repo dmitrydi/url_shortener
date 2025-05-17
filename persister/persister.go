@@ -3,6 +3,7 @@ package persister
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/dmitrydi/url_shortener/storage"
@@ -26,6 +27,7 @@ type URLEntry struct {
 func NewPersister(filename string) (*Persister, error) {
 	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
+		fmt.Println("could not open file ", filename)
 		return nil, err
 	}
 	return &Persister{filename: filename, producer: &Producer{file: file}}, nil

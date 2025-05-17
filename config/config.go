@@ -10,7 +10,7 @@ const baseURLEnv = "BASE_URL"
 const storageFileEnv = "FILE_STORAGE_PATH"
 const defaultServerAddr = ":8080"
 const defaultBaseURL = "http://localhost:8080/"
-const defaultFilePath = "~/storage_persist.txt"
+const defaultFilePath = "./storage_persist.txt"
 
 var (
 	ServerAddr      *string

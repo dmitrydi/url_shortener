@@ -38,17 +38,11 @@ func NewBasicStorage(rootPrefix string, persistPath string) *BasicStorage {
 	}
 	ret.rootPrefix = rootPrefix
 	ret.data = make(map[string]string)
-	p, err := persister.NewPersister(persistPath)
-	if err != nil {
-		return nil
+	p, _ := persister.NewPersister(persistPath)
+	if p != nil {
+		lastID, _ := p.Restore(ret)
+		ret.lastID = lastID
 	}
-	lastID, err := p.Restore(ret)
-	if err != nil {
-		if err != io.EOF {
-			return nil
-		}
-	}
-	ret.lastID = lastID
 	ret.persister = p
 	return ret
 }
@@ -71,7 +65,10 @@ func (storage *BasicStorage) Put(initURL string) (string, error) {
 	}
 	storage.data[randURL] = initURL
 	storage.lastID += 1
-	storage.persister.Add(storage.lastID, randURL, initURL)
+	if storage.persister != nil {
+		storage.persister.Add(storage.lastID, randURL, initURL)
+	}
+
 	return storage.rootPrefix + randURL, nil
 }
 
