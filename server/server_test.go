@@ -2,10 +2,15 @@ package server
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/json"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/dmitrydi/url_shortener/storage"
@@ -169,6 +174,28 @@ func TestGetHandler(t *testing.T) {
 	}
 }
 
+func TestJSONHandler(t *testing.T) {
+	req := makeJSONRequest(http.MethodPost, "/api/shorten", "ya.ru")
+	req.Header.Set("Content-Type", "application/json")
+	prefix := "http://localhost:8080/"
+	storage := NewBasicStorage(prefix)
+	w := httptest.NewRecorder()
+	JSONHandler(w, req, storage)
+	resp := w.Result()
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"), "invalid content type")
+	require.Equal(t, resp.StatusCode, http.StatusCreated, "bad response status")
+	defer resp.Body.Close()
+
+	resBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	jresp := JSONResp{}
+
+	err = json.Unmarshal(resBody, &jresp)
+	require.NoError(t, err)
+
+	assert.Equal(t, len(prefix)+storage.GetURLSize(), len(jresp.Result), "invalid body size")
+}
+
 func testRequest(t *testing.T, ts *httptest.Server, method,
 	path, body string) (*http.Response, string) {
 	req, err := http.NewRequest(method, ts.URL+path, strings.NewReader(body))
@@ -188,13 +215,26 @@ func testRequest(t *testing.T, ts *httptest.Server, method,
 	return resp, string(respBody)
 }
 
+func makeJSONRequest(method string, path string, initURL string) *http.Request {
+	jreq := JSONReq{initURL}
+	bt, err := json.Marshal(jreq)
+	if err != nil {
+		log.Fatal("makeJSONRequest: json.Marshal")
+	}
+	req, err := http.NewRequest(method, path, bytes.NewBuffer(bt))
+	if err != nil {
+		log.Fatal("http.NewRequest ", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return req
+}
+
 func TestRouter(t *testing.T) {
 	hostPrefix := "http://localhost:8080/"
 	initURL := "www.ya.ru"
 	tstorage := NewBasicStorage(hostPrefix)
-	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage)))
+	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
 	defer tserver.Close()
-	//tserver.Start()
 	postResp, postBody := testRequest(t, tserver, http.MethodPost, "/", initURL)
 	defer postResp.Body.Close()
 	assert.Equal(t, postResp.StatusCode, http.StatusCreated, "expected successful creation")
@@ -204,5 +244,57 @@ func TestRouter(t *testing.T) {
 	defer getResp.Body.Close()
 	assert.Equal(t, http.StatusTemporaryRedirect, getResp.StatusCode, "invalid response code")
 	assert.Equal(t, initURL, getResp.Header.Get("Location"), "invalid redirect")
+}
 
+func TestRouterJSONApi(t *testing.T) {
+	hostPrefix := "http://localhost:8080/"
+	initURL := "www.ya.ru"
+	tstorage := NewBasicStorage(hostPrefix)
+	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
+	defer tserver.Close()
+	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
+	resp, err := tserver.Client().Do(req)
+	require.NoError(t, err, "server error")
+	assert.Equal(t, http.StatusCreated, resp.StatusCode, "bad response status")
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"), "bad response content type")
+
+	defer resp.Body.Close()
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(resp.Body)
+	require.NoError(t, err, "io.ReadAll error")
+	r := JSONResp{}
+	err = json.Unmarshal(buf.Bytes(), &r)
+	require.NoError(t, err, "json.Unmarshal")
+	assert.Equal(t, len(hostPrefix)+tstorage.GetURLSize(), len(r.Result), "invalid body size")
+}
+
+func TestRouterCompress(t *testing.T) {
+	hostPrefix := "http://localhost:8080/"
+	initURL := "www.ya.ru"
+	tstorage := NewBasicStorage(hostPrefix)
+	writerPool := &sync.Pool{
+		New: func() any {
+			writer, _ := gzip.NewWriterLevel(nil, gzip.BestSpeed)
+			return writer
+		},
+	}
+	getHandler := CompressHandler(MakeGetHandler(tstorage), writerPool)
+	postHandler := CompressHandler(MakePostHandler(tstorage), writerPool)
+	jsonHandler := CompressHandler(MakeJSONHandler(tstorage), writerPool)
+	tserver := httptest.NewServer(MakeRouter(getHandler, postHandler, jsonHandler))
+	defer tserver.Close()
+	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
+	resp, err := tserver.Client().Do(req)
+	require.NoError(t, err, "server error")
+	fmt.Println(resp)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode, "bad response status")
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"), "bad response content type")
+	defer resp.Body.Close()
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(resp.Body)
+	require.NoError(t, err, "io.ReadAll error")
+	r := JSONResp{}
+	err = json.Unmarshal(buf.Bytes(), &r)
+	require.NoError(t, err, "json.Unmarshal")
+	assert.Equal(t, len(hostPrefix)+tstorage.GetURLSize(), len(r.Result), "invalid body size")
 }
