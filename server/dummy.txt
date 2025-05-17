@@ -1,0 +1,14 @@
+{"id":1,"short_url":"ZBsLLvBv","init_url":"some_url"}
+{"id":2,"short_url":"zafbDVka","init_url":"ya.ru"}
+{"id":3,"short_url":"kBvQRRgA","init_url":"ya.ru"}
+{"id":4,"short_url":"KTfFlHRS","init_url":"ya.ru"}
+{"id":5,"short_url":"fvjCzgXb","init_url":"www.ya.ru"}
+{"id":6,"short_url":"iMoqkKYx","init_url":"www.ya.ru"}
+{"id":7,"short_url":"FdDpIBTV","init_url":"www.ya.ru"}
+{"id":8,"short_url":"EvqQVUFB","init_url":"some_url"}
+{"id":9,"short_url":"hbMgAklz","init_url":"ya.ru"}
+{"id":10,"short_url":"JAUAfNmw","init_url":"ya.ru"}
+{"id":11,"short_url":"OscnzZCZ","init_url":"ya.ru"}
+{"id":12,"short_url":"CcfqsWUf","init_url":"www.ya.ru"}
+{"id":13,"short_url":"pFeaCRHu","init_url":"www.ya.ru"}
+{"id":14,"short_url":"ExtolukG","init_url":"www.ya.ru"}
