@@ -21,7 +21,7 @@ import (
 func TestBasicStorage(t *testing.T) {
 	prefix := "prefix/"
 	initURL := "some_url"
-	pfile := "~/dummy.txt"
+	pfile := "./dummy.txt"
 	stor := NewBasicStorage(prefix, pfile)
 	if stor == nil {
 		log.Fatal("could not initialize storage")
@@ -37,7 +37,7 @@ func TestBasicStorage(t *testing.T) {
 
 func TestPostHandler(t *testing.T) {
 	prefix := "http://localhost:8080/"
-	pfile := "~/dummy.txt"
+	pfile := "./dummy.txt"
 	storage := NewBasicStorage(prefix, pfile)
 	if storage == nil {
 		log.Fatal("could not initialize storage")
@@ -107,7 +107,7 @@ func TestPostHandler(t *testing.T) {
 
 func TestGetHandler(t *testing.T) {
 	prefix := "http://localhost:8080/"
-	pfile := "~/dummy.txt"
+	pfile := "./dummy.txt"
 	stor := NewBasicStorage(prefix, pfile)
 	if stor == nil {
 		log.Fatal("could not initialize storage")
@@ -193,7 +193,7 @@ func TestJSONHandler(t *testing.T) {
 	req := makeJSONRequest(http.MethodPost, "/api/shorten", "ya.ru")
 	req.Header.Set("Content-Type", "application/json")
 	prefix := "http://localhost:8080/"
-	pfile := "~/dummy.txt"
+	pfile := "./dummy.txt"
 	storage := NewBasicStorage(prefix, pfile)
 	if storage == nil {
 		log.Fatal("could not initialize storage")
@@ -252,7 +252,7 @@ func makeJSONRequest(method string, path string, initURL string) *http.Request {
 func TestRouter(t *testing.T) {
 	hostPrefix := "http://localhost:8080/"
 	initURL := "www.ya.ru"
-	tstorage := NewBasicStorage(hostPrefix, "~/dummy.txt")
+	tstorage := NewBasicStorage(hostPrefix, "./dummy.txt")
 	if tstorage == nil {
 		log.Fatal("could not initialize storage")
 	}
@@ -273,7 +273,7 @@ func TestRouter(t *testing.T) {
 func TestRouterJSONApi(t *testing.T) {
 	hostPrefix := "http://localhost:8080/"
 	initURL := "www.ya.ru"
-	tstorage := NewBasicStorage(hostPrefix, "~/dummy.txt")
+	tstorage := NewBasicStorage(hostPrefix, "./dummy.txt")
 	if tstorage == nil {
 		log.Fatal("could not initialize storage")
 	}
@@ -299,7 +299,7 @@ func TestRouterJSONApi(t *testing.T) {
 func TestRouterCompress(t *testing.T) {
 	hostPrefix := "http://localhost:8080/"
 	initURL := "www.ya.ru"
-	tstorage := NewBasicStorage(hostPrefix, "~/dummy.txt")
+	tstorage := NewBasicStorage(hostPrefix, "./dummy.txt")
 	if tstorage == nil {
 		log.Fatal("could not initialize storage")
 	}

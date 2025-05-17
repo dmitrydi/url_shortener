@@ -43,8 +43,10 @@ func NewBasicStorage(rootPrefix string, persistPath string) *BasicStorage {
 		return nil
 	}
 	lastID, err := p.Restore(ret)
-	if err != io.EOF {
-		return nil
+	if err != nil {
+		if err != io.EOF {
+			return nil
+		}
 	}
 	ret.lastID = lastID
 	ret.persister = p
