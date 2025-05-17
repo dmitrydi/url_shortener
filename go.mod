@@ -19,3 +19,5 @@ require (
 replace github.com/dmitrydi/url_shortener/storage => ../../storage
 
 replace github.com/dmitrydi/url_shortener/server => ../../server
+
+replace github.com/dmitrydi/url_shortener/persister => ../../persister

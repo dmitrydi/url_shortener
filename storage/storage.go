@@ -7,6 +7,7 @@ import (
 type URLStorage interface {
 	Put(string) (string, error)
 	Get(string) (string, error)
+	AddData(string, string) error
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

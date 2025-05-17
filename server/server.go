@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dmitrydi/url_shortener/internal/helpers"
+	"github.com/dmitrydi/url_shortener/persister"
 	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -25,9 +26,11 @@ const shortURLLen = 8
 type BasicStorage struct {
 	rootPrefix string
 	data       map[string]string
+	lastID     uint
+	persister  *persister.Persister
 }
 
-func NewBasicStorage(rootPrefix string) *BasicStorage {
+func NewBasicStorage(rootPrefix string, persistPath string) *BasicStorage {
 	ret := new(BasicStorage)
 	ru := []rune(rootPrefix)
 	if string(ru[len(ru)-1]) != "/" {
@@ -35,6 +38,16 @@ func NewBasicStorage(rootPrefix string) *BasicStorage {
 	}
 	ret.rootPrefix = rootPrefix
 	ret.data = make(map[string]string)
+	p, err := persister.NewPersister(persistPath)
+	if err != nil {
+		return nil
+	}
+	lastID, err := p.Restore(ret)
+	if err != io.EOF {
+		return nil
+	}
+	ret.lastID = lastID
+	ret.persister = p
 	return ret
 }
 
@@ -55,7 +68,13 @@ func (storage *BasicStorage) Put(initURL string) (string, error) {
 		}
 	}
 	storage.data[randURL] = initURL
+	storage.lastID += 1
+	storage.persister.Add(storage.lastID, randURL, initURL)
 	return storage.rootPrefix + randURL, nil
+}
+
+func (storage *BasicStorage) Close() error {
+	return storage.persister.Close()
 }
 
 func (storage *BasicStorage) Get(shortURL string) (string, error) {
@@ -72,6 +91,15 @@ func (storage *BasicStorage) RemovePrefix(url string) string {
 
 func (storage *BasicStorage) GetURLSize() int {
 	return shortURLLen
+}
+
+func (storage *BasicStorage) AddData(shortURL string, initUrl string) error {
+	_, ok := storage.data[shortURL]
+	if ok {
+		return errors.New("storage already has key")
+	}
+	storage.data[shortURL] = initUrl
+	return nil
 }
 
 // Get Handler

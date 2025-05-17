@@ -14,7 +14,11 @@ import (
 
 func main() {
 	flag.Parse()
-	s := server.NewBasicStorage(*config.URLPrefix)
+	s := server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
+	if s == nil {
+		log.Fatal("Could not initialize storage")
+	}
+	defer s.Close()
 	logger, err := zap.NewDevelopment()
 	if err != nil {
 		log.Fatal(err)
