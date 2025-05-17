@@ -19,7 +19,7 @@ type Persister struct {
 }
 
 type URLEntry struct {
-	Id       uint   `json:"id"`
+	ID       uint   `json:"id"`
 	ShortURL string `json:"short_url"`
 	InitURL  string `json:"init_url"`
 }
