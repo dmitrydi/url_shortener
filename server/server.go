@@ -1,12 +1,14 @@
 package server
 
 import (
+	"bufio"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -18,6 +20,71 @@ import (
 	"go.uber.org/zap"
 )
 
+// Persister
+
+type Producer struct {
+	file *os.File
+}
+
+type Persister struct {
+	filename string
+	producer *Producer
+}
+
+type URLEntry struct {
+	ID       uint   `json:"id"`
+	ShortURL string `json:"short_url"`
+	InitURL  string `json:"init_url"`
+}
+
+func NewPersister(filename string) (*Persister, error) {
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Println("could not open file ", filename)
+		return nil, err
+	}
+	return &Persister{filename: filename, producer: &Producer{file: file}}, nil
+}
+
+func (p *Persister) Close() error {
+	return p.producer.file.Close()
+}
+
+func (p *Persister) Restore(storage storage.URLStorage) (uint, error) {
+	file, err := os.OpenFile(p.filename, os.O_RDONLY|os.O_CREATE, 0666)
+	var lastID uint
+	if err != nil {
+		return lastID, err
+	}
+	scanner := bufio.NewScanner(file)
+	for {
+		if !scanner.Scan() {
+			return lastID, scanner.Err()
+		}
+		data := scanner.Bytes()
+		entry := URLEntry{}
+		err := json.Unmarshal(data, &entry)
+		if err != nil {
+			return lastID, err
+		}
+		storage.AddData(entry.ShortURL, entry.InitURL)
+		if entry.ID > lastID {
+			lastID = entry.ID
+		}
+	}
+}
+
+func (p *Persister) Add(id uint, shortURL string, initURL string) error {
+	entry := URLEntry{id, shortURL, initURL}
+	data, err := json.Marshal(&entry)
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	_, err = p.producer.file.Write(data)
+	return err
+}
+
 const shortURLLen = 8
 
 // Storage
@@ -25,9 +92,11 @@ const shortURLLen = 8
 type BasicStorage struct {
 	rootPrefix string
 	data       map[string]string
+	lastID     uint
+	persister  *Persister
 }
 
-func NewBasicStorage(rootPrefix string) *BasicStorage {
+func NewBasicStorage(rootPrefix string, persistPath string) *BasicStorage {
 	ret := new(BasicStorage)
 	ru := []rune(rootPrefix)
 	if string(ru[len(ru)-1]) != "/" {
@@ -35,6 +104,12 @@ func NewBasicStorage(rootPrefix string) *BasicStorage {
 	}
 	ret.rootPrefix = rootPrefix
 	ret.data = make(map[string]string)
+	p, _ := NewPersister(persistPath)
+	if p != nil {
+		lastID, _ := p.Restore(ret)
+		ret.lastID = lastID
+	}
+	ret.persister = p
 	return ret
 }
 
@@ -55,7 +130,16 @@ func (storage *BasicStorage) Put(initURL string) (string, error) {
 		}
 	}
 	storage.data[randURL] = initURL
+	storage.lastID += 1
+	if storage.persister != nil {
+		storage.persister.Add(storage.lastID, randURL, initURL)
+	}
+
 	return storage.rootPrefix + randURL, nil
+}
+
+func (storage *BasicStorage) Close() error {
+	return storage.persister.Close()
 }
 
 func (storage *BasicStorage) Get(shortURL string) (string, error) {
@@ -72,6 +156,15 @@ func (storage *BasicStorage) RemovePrefix(url string) string {
 
 func (storage *BasicStorage) GetURLSize() int {
 	return shortURLLen
+}
+
+func (storage *BasicStorage) AddData(shortURL string, initURL string) error {
+	_, ok := storage.data[shortURL]
+	if ok {
+		return errors.New("storage already has key")
+	}
+	storage.data[shortURL] = initURL
+	return nil
 }
 
 // Get Handler
@@ -283,18 +376,10 @@ func (w *customWriter) Write(b []byte) (int, error) {
 
 var compressTypes = []string{"application/json", "text/html"}
 
-// func (w gzipWriter) Write(b []byte) (int, error) {
-// 	if !slices.Contains(compressTypes, w.ResponseWriter.Header().Get("Content-Type")) || !w.Compress || len(b) < 1400 {
-// 		return w.ResponseWriter.Write(b)
-// 	}
-// 	w.Header().Set("Content-Encoding", "gzip")
-// 	w.WriteHeader(http.StatusCreated)
-// 	return w.Writer.Write(b)
-// }
-
 func CompressHandler(h http.HandlerFunc, pl *sync.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		gz := gzip.NewWriter(w)
+		gz := pl.Get().(*gzip.Writer)
+		gz.Reset(w)
 		defer gz.Close()
 		cw := customWriter{ResponseWriter: w, Writer: gz, Compress: strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"), StatusCode: 0}
 		h(&cw, r)
