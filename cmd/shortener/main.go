@@ -26,14 +26,13 @@ func main() {
 	defer logger.Sync()
 	writerPool := &sync.Pool{
 		New: func() any {
-			writer, _ := gzip.NewWriterLevel(nil, gzip.BestSpeed)
+			writer, err := gzip.NewWriterLevel(nil, gzip.BestSpeed)
+			if err != nil {
+				log.Fatal("Could not create gzip writer ", err.Error())
+			}
 			return writer
 		},
 	}
-	// getHandler := middleware.LoggingHandler(server.MakeGetHandler(s), logger)
-	// postHandler := middleware.LoggingHandler(middleware.CompressHandler(server.MakePostHandler(s), writerPool), logger)
-	// jsonHandler := middleware.LoggingHandler(middleware.CompressHandler(server.MakeJSONHandler(s), writerPool), logger)
-	// r := server.MakeRouter(getHandler, postHandler, jsonHandler)
 	r := server.MakeRouter2(server.MakeGetHandler(s), server.MakePostHandler(s), server.MakeJSONHandler(s), logger, writerPool)
 	log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
 }
