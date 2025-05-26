@@ -2,14 +2,18 @@ package main
 
 import (
 	"compress/gzip"
+	"database/sql"
 	"flag"
 	"log"
 	"net/http"
 	"sync"
 
 	"github.com/dmitrydi/url_shortener/config"
+	"github.com/dmitrydi/url_shortener/database"
 	"github.com/dmitrydi/url_shortener/server"
 	"go.uber.org/zap"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -33,6 +37,12 @@ func main() {
 			return writer
 		},
 	}
-	r := server.MakeRouter2(server.MakeGetHandler(s), server.MakePostHandler(s), server.MakeJSONHandler(s), logger, writerPool)
+	db, err := sql.Open("pgx", *config.DbPrompt)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	r := server.MakeRouter2(server.MakeGetHandler(s),
+		server.MakePostHandler(s), server.MakeJSONHandler(s), database.MakePingHandler(db), logger, writerPool)
 	log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
 }

@@ -252,10 +252,11 @@ func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonH
 	return r
 }
 
-func MakeRouter2(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc, logger *zap.Logger, pl *sync.Pool) chi.Router {
+func MakeRouter2(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc, pingHandler http.HandlerFunc, logger *zap.Logger, pl *sync.Pool) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.MakeLogHandler(logger))
+	r.Get(`/ping`, pingHandler)
 	r.Get(`/{path}`, getHandler)
 	r.Group(func(rt chi.Router) {
 		rt.Use(middleware.MakeCompressHandler(pl))

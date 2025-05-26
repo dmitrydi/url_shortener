@@ -3,7 +3,9 @@ package server
 import (
 	"bytes"
 	"compress/gzip"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -12,11 +14,14 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dmitrydi/url_shortener/database"
 	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestBasicStorage(t *testing.T) {
@@ -389,7 +394,16 @@ func TestRouterCompress2(t *testing.T) {
 	getHandler := MakeGetHandler(tstorage)
 	postHandler := MakePostHandler(tstorage)
 	jsonHandler := MakeJSONHandler(tstorage)
-	tserver := httptest.NewServer(MakeRouter2(getHandler, postHandler, jsonHandler, logger, writerPool))
+	ps := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
+		`localhost`, `user2`, `07512851SqlPass`, `videos`)
+
+	db, err := sql.Open("pgx", ps)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	pingHandler := database.MakePingHandler(db)
+	tserver := httptest.NewServer(MakeRouter2(getHandler, postHandler, jsonHandler, pingHandler, logger, writerPool))
 	defer tserver.Close()
 	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
 	resp, err := tserver.Client().Do(req)
