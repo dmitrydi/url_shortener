@@ -11,6 +11,7 @@ import (
 	"github.com/dmitrydi/url_shortener/config"
 	"github.com/dmitrydi/url_shortener/database"
 	"github.com/dmitrydi/url_shortener/server"
+	"github.com/dmitrydi/url_shortener/storage"
 	"go.uber.org/zap"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -18,11 +19,25 @@ import (
 
 func main() {
 	flag.Parse()
+	var db *sql.DB
+	var s storage.URLStorage
+	var err error
+	if len(*config.DBPrompt) > 0 {
+		db, err = sql.Open("pgx", *config.DBPrompt)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer db.Close()
+		s, err = database.NewDBStorage(db, *config.URLPrefix)
+	} else {
 
-	s, err := server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
+		s, err = server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
+
+	}
 	if err != nil {
 		log.Fatal("Could not initialize storage ", err.Error())
 	}
+
 	defer s.Close()
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -38,11 +53,7 @@ func main() {
 			return writer
 		},
 	}
-	db, err := sql.Open("pgx", *config.DBPrompt)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
+
 	r := server.MakeRouter2(server.MakeGetHandler(s),
 		server.MakePostHandler(s), server.MakeJSONHandler(s), database.MakePingHandler(db), logger, writerPool)
 	log.Fatal(http.ListenAndServe(*config.ServerAddr, r))

@@ -17,6 +17,7 @@ type URLStorage interface {
 	Put(string, context.Context) (string, error)
 	Get(string, context.Context) (string, error)
 	AddData(string, string) error
+	Close() error
 }
 
 func MakeRandomString(n int) string {
