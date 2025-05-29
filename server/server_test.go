@@ -33,10 +33,10 @@ func TestBasicStorage(t *testing.T) {
 		log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer stor.Close()
-	shortURL, err := stor.Put(initURL)
+	shortURL, err := stor.Put(initURL, nil)
 	require.NoError(t, err, "storage error on Put()")
 	assert.Equal(t, len(strings.TrimPrefix(shortURL, prefix)), storage.ShortURLLen, "invalid short URL pattern")
-	restoredURL, err := stor.Get(stor.RemovePrefix(shortURL))
+	restoredURL, err := stor.Get(stor.RemovePrefix(shortURL), nil)
 	require.NoError(t, err, "storage error on Get()")
 	assert.Equal(t, restoredURL, initURL, "restored URL differs from initial one")
 }

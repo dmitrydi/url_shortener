@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"math/rand"
 	"os"
@@ -13,8 +14,8 @@ const (
 )
 
 type URLStorage interface {
-	Put(string) (string, error)
-	Get(string) (string, error)
+	Put(string, context.Context) (string, error)
+	Get(string, context.Context) (string, error)
 	AddData(string, string) error
 }
 

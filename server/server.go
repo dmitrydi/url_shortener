@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,7 +57,7 @@ func MakeBasicStorage(rootPrefix string) BasicStorage {
 	return ret
 }
 
-func (stor *BasicStorage) Put(initURL string) (string, error) {
+func (stor *BasicStorage) Put(initURL string, _ context.Context) (string, error) {
 	var randURL string
 	for {
 		randURL = helpers.MakeRandomString(storage.ShortURLLen)
@@ -78,7 +79,7 @@ func (stor *BasicStorage) Close() error {
 	return stor.persister.Close()
 }
 
-func (stor *BasicStorage) Get(shortURL string) (string, error) {
+func (stor *BasicStorage) Get(shortURL string, _ context.Context) (string, error) {
 	val, ok := stor.data[shortURL]
 	if !ok {
 		return "", errors.New("url not exists")
@@ -123,7 +124,7 @@ func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	res, err := st.Get(url[1])
+	res, err := st.Get(url[1], r.Context())
 	if err == nil {
 		w.Header().Set("Location", res)
 		w.WriteHeader(http.StatusTemporaryRedirect)
@@ -167,7 +168,7 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL, err := st.Put(bodyString)
+	shortURL, err := st.Put(bodyString, r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -220,7 +221,7 @@ func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 		return
 	}
 	var resp = JSONResp{}
-	resp.Result, err = st.Put(req.URL)
+	resp.Result, err = st.Put(req.URL, r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return

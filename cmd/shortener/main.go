@@ -18,6 +18,7 @@ import (
 
 func main() {
 	flag.Parse()
+
 	s, err := server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
 	if err != nil {
 		log.Fatal("Could not initialize storage ", err.Error())
