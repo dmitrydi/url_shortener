@@ -1,16 +1,18 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
 	ps := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
-		`localhost`, `user2`, `07512851SqlPass`, `videos`)
+		`localhost`, `shortener`, `07512851SqlPass`, `url_shortener`)
 
 	db, err := sql.Open("pgx", ps)
 	if err != nil {
@@ -24,10 +26,12 @@ func main() {
 		log.Fatal("could not ping db")
 	}
 
-	// ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	// defer cancel()
-	// if err = db.PingContext(ctx); err != nil {
-	// 	panic(err)
-	// }
 	fmt.Println("Successfully ping DB")
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	_, err = db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS dummy2 (short_url TEXT NOT NULL, init_url TEXT NOT NULL)")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Created table")
 }
