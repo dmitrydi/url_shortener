@@ -22,7 +22,7 @@ var (
 	ServerAddr      *string
 	URLPrefix       *string
 	StorageFilePath *string
-	DbPrompt        *string
+	DBPrompt        *string
 )
 
 func init() {
@@ -42,5 +42,5 @@ func init() {
 	ServerAddr = flag.String("a", srv, "address of server")
 	URLPrefix = flag.String("b", base, "short URL prefix")
 	StorageFilePath = flag.String("f", sfile, "path to storage persist file")
-	DbPrompt = flag.String("d", dbprompt, "db connection prompt")
+	DBPrompt = flag.String("d", dbprompt, "db connection prompt")
 }

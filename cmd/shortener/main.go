@@ -37,7 +37,7 @@ func main() {
 			return writer
 		},
 	}
-	db, err := sql.Open("pgx", *config.DbPrompt)
+	db, err := sql.Open("pgx", *config.DBPrompt)
 	if err != nil {
 		log.Fatal(err)
 	}

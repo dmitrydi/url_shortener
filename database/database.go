@@ -1,8 +1,10 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
+	"time"
 )
 
 func PingHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
@@ -10,7 +12,9 @@ func PingHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	err := db.Ping()
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	err := db.PingContext(ctx)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
