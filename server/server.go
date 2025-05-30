@@ -1,25 +1,32 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
+
 	"strings"
 
 	"github.com/dmitrydi/url_shortener/internal/helpers"
+	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
-const shortURLLen = 8
+// Storage
 
 type BasicStorage struct {
 	rootPrefix string
 	data       map[string]string
+	lastID     uint
+	persister  *storage.Persister
 }
 
-func NewBasicStorage(rootPrefix string) *BasicStorage {
+func NewBasicStorage(rootPrefix string, persistPath string) (*BasicStorage, error) {
 	ret := new(BasicStorage)
 	ru := []rune(rootPrefix)
 	if string(ru[len(ru)-1]) != "/" {
@@ -27,7 +34,19 @@ func NewBasicStorage(rootPrefix string) *BasicStorage {
 	}
 	ret.rootPrefix = rootPrefix
 	ret.data = make(map[string]string)
-	return ret
+	p, err := storage.NewPersister(persistPath)
+	if err != nil {
+		return ret, err
+	}
+	if p != nil {
+		lastID, err := p.Restore(ret)
+		if err != nil {
+			return ret, err
+		}
+		ret.lastID = lastID
+	}
+	ret.persister = p
+	return ret, nil
 }
 
 func MakeBasicStorage(rootPrefix string) BasicStorage {
@@ -37,34 +56,62 @@ func MakeBasicStorage(rootPrefix string) BasicStorage {
 	return ret
 }
 
-func (storage *BasicStorage) Put(initURL string) (string, error) {
+func (stor *BasicStorage) Put(initURL string) (string, error) {
 	var randURL string
 	for {
-		randURL = helpers.MakeRandomString(shortURLLen)
-		_, ok := storage.data[randURL]
+		randURL = helpers.MakeRandomString(storage.ShortURLLen)
+		_, ok := stor.data[randURL]
 		if !ok {
 			break
 		}
 	}
-	storage.data[randURL] = initURL
-	return storage.rootPrefix + randURL, nil
+	stor.data[randURL] = initURL
+	stor.lastID += 1
+	if stor.persister != nil {
+		stor.persister.Add(stor.lastID, randURL, initURL)
+	}
+
+	return stor.rootPrefix + randURL, nil
 }
 
-func (storage *BasicStorage) Get(shortURL string) (string, error) {
-	val, ok := storage.data[shortURL]
+func (stor *BasicStorage) Close() error {
+	return stor.persister.Close()
+}
+
+func (stor *BasicStorage) Get(shortURL string) (string, error) {
+	val, ok := stor.data[shortURL]
 	if !ok {
 		return "", errors.New("url not exists")
 	}
 	return val, nil
 }
 
-func (storage *BasicStorage) RemovePrefix(url string) string {
-	return strings.TrimPrefix(url, storage.rootPrefix)
+func (stor *BasicStorage) RemovePrefix(url string) string {
+	return strings.TrimPrefix(url, stor.rootPrefix)
 }
 
-func (storage *BasicStorage) GetURLSize() int {
-	return shortURLLen
+func (stor *BasicStorage) GetURLSize() int {
+	return storage.ShortURLLen
 }
+
+type DuplicateKeyError struct {
+	ExistingKey string
+}
+
+func (e *DuplicateKeyError) Error() string {
+	return e.ExistingKey
+}
+
+func (stor *BasicStorage) AddData(shortURL string, initURL string) error {
+	_, ok := stor.data[shortURL]
+	if ok {
+		return &DuplicateKeyError{ExistingKey: shortURL}
+	}
+	stor.data[shortURL] = initURL
+	return nil
+}
+
+// Get Handler
 
 func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
 	if r.Method != http.MethodGet {
@@ -91,13 +138,26 @@ func MakeGetHandler(st storage.URLStorage) http.HandlerFunc {
 	}
 }
 
+type GHandler struct {
+	st storage.URLStorage
+}
+
+// Post Handler
+
 func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
+	defer r.Body.Close()
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	body, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	reader, err := middleware.MakeDecompReader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -114,7 +174,6 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(shortURL)))
-
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(shortURL))
 }
@@ -125,9 +184,83 @@ func MakePostHandler(st storage.URLStorage) http.HandlerFunc {
 	}
 }
 
-func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc) chi.Router {
+// JSON Handler
+
+type JSONReq struct {
+	URL string `json:"url"`
+}
+
+type JSONResp struct {
+	Result string `json:"result"`
+}
+
+func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
+	defer r.Body.Close()
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	reader, err := middleware.MakeDecompReader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	body, err := io.ReadAll(reader)
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	var req = JSONReq{}
+	err = json.Unmarshal(body, &req)
+	if err != nil || len(req.URL) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	var resp = JSONResp{}
+	resp.Result, err = st.Put(req.URL)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	respJSON, err := json.Marshal(resp)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respJSON)))
+	w.WriteHeader(http.StatusCreated)
+	w.Write(respJSON)
+}
+
+func MakeJSONHandler(st storage.URLStorage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		JSONHandler(w, r, st)
+	}
+}
+
+// Builder
+
+func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc) chi.Router {
 	r := chi.NewRouter()
 	r.Get(`/{path}`, getHandler)
+	r.Post(`/api/shorten`, jsonHandler)
 	r.Post(`/`, postHandler)
+	return r
+}
+
+func MakeRouter2(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc, logger *zap.Logger, pl *sync.Pool) chi.Router {
+	r := chi.NewRouter()
+
+	r.Use(middleware.MakeLogHandler(logger))
+	r.Get(`/{path}`, getHandler)
+	r.Group(func(rt chi.Router) {
+		rt.Use(middleware.MakeCompressHandler(pl))
+		r.Post(`/api/shorten`, jsonHandler)
+		r.Post(`/`, postHandler)
+	})
 	return r
 }
