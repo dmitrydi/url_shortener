@@ -13,10 +13,20 @@ const (
 	ShortURLLen = 8
 )
 
+type StringWithID struct {
+	ID   string
+	Body string
+}
+
+type BatchRequest = []StringWithID
+type BatchResponse = []StringWithID
+
 type URLStorage interface {
 	Put(string, context.Context) (string, error)
 	Get(string, context.Context) (string, error)
 	AddData(string, string) error
+	PutMany(BatchRequest, context.Context) (BatchResponse, error)
+	GetMany(BatchRequest, context.Context) (BatchResponse, error)
 	Close() error
 }
 

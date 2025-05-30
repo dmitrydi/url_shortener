@@ -3,8 +3,10 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/dmitrydi/url_shortener/internal/helpers"
@@ -82,6 +84,70 @@ func (d *DBStorage) Get(short_url string, ctx context.Context) (string, error) {
 	}
 	return init_url, nil
 }
+
+func (d *DBStorage) PutMany(req storage.BatchRequest, ctx context.Context) (storage.BatchResponse, error) {
+	if len(req) == 0 {
+		return nil, errors.New("empty batch")
+	}
+	result := make(storage.BatchResponse, 0)
+	var sb strings.Builder
+	for idx, r := range req {
+		randURL := helpers.MakeRandomString(storage.ShortURLLen)
+		result = append(result, storage.StringWithID{ID: r.ID, Body: d.rootPrefix + randURL})
+		if idx > 0 {
+			sb.WriteString(fmt.Sprintf(", ('%s', '%s')", randURL, r.Body))
+		} else {
+			sb.WriteString(fmt.Sprintf("('%s', '%s')", randURL, r.Body))
+		}
+	}
+
+	_, err := d.db.ExecContext(ctx, `INSERT INTO urls VALUES $1`, sb.String())
+	if err != nil {
+		fmt.Println("PutMany error, ", err)
+		return nil, err
+	}
+	return result, nil
+}
+
+func MakeGetList(req storage.BatchRequest) string {
+	var sb strings.Builder
+	for idx, r := range req {
+		if idx > 0 {
+			sb.WriteString(fmt.Sprintf(", '%s'", r.Body))
+		} else {
+			sb.WriteString(fmt.Sprintf("'%s'", r.Body))
+		}
+	}
+	return sb.String()
+}
+
+func (d *DBStorage) GetMany(req storage.BatchRequest, ctx context.Context) (storage.BatchResponse, error) {
+	if len(req) == 0 {
+		return nil, errors.New("empty batch")
+	}
+	rows, err := d.db.QueryContext(ctx, `SELECT (init_url) FROM urls WHERE short_url in ($1)`, MakeGetList(req))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(storage.BatchResponse, 0)
+	var idx int
+	for rows.Next() {
+		var initURL string
+		err = rows.Scan(&initURL)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, storage.StringWithID{ID: req[idx].ID, Body: initURL})
+		idx++
+	}
+	return result, nil
+}
+
+/*PutMany(BatchRequest, context.Context) (BatchResponse, error)
+GetMany(BatchRequest, context.Context) (BatchResponse, error)
+
+*/
 
 func (*DBStorage) AddData(_ string, _ string) error {
 	return nil

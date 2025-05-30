@@ -87,6 +87,30 @@ func (stor *BasicStorage) Get(shortURL string, _ context.Context) (string, error
 	return val, nil
 }
 
+func (stor *BasicStorage) GetMany(req storage.BatchRequest, _ context.Context) (storage.BatchResponse, error) {
+	result := make(storage.BatchResponse, 0)
+	for _, r := range req {
+		initURL, err := stor.Get(r.Body, nil)
+		if err != nil {
+			return result, err
+		}
+		result = append(result, storage.StringWithID{ID: r.ID, Body: initURL})
+	}
+	return result, nil
+}
+
+func (stor *BasicStorage) PutMany(req storage.BatchRequest, _ context.Context) (storage.BatchResponse, error) {
+	result := make(storage.BatchResponse, 0)
+	for _, r := range req {
+		shortURL, err := stor.Put(r.Body, nil)
+		if err != nil {
+			return result, err
+		}
+		result = append(result, storage.StringWithID{ID: r.ID, Body: shortURL})
+	}
+	return result, nil
+}
+
 func (stor *BasicStorage) RemovePrefix(url string) string {
 	return strings.TrimPrefix(url, stor.rootPrefix)
 }
@@ -241,6 +265,17 @@ func MakeJSONHandler(st storage.URLStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		JSONHandler(w, r, st)
 	}
+}
+
+// Batch handler
+type BatchReq struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type BatchResp struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
 }
 
 // Builder
