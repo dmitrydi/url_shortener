@@ -101,7 +101,11 @@ func (d *DBStorage) PutMany(req storage.OriginalBatch, ctx context.Context) (sto
 		}
 	}
 
-	_, err := d.db.ExecContext(ctx, `INSERT INTO urls VALUES $1`, sb.String())
+	ss := sb.String()
+
+	fmt.Println("Put many ss: ", ss)
+
+	_, err := d.db.ExecContext(ctx, `INSERT INTO urls VALUES $1`, ss)
 	if err != nil {
 		fmt.Println("PutMany error, ", err)
 		return nil, err
