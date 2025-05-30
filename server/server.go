@@ -87,26 +87,26 @@ func (stor *BasicStorage) Get(shortURL string, _ context.Context) (string, error
 	return val, nil
 }
 
-func (stor *BasicStorage) GetMany(req storage.BatchRequest, _ context.Context) (storage.BatchResponse, error) {
-	result := make(storage.BatchResponse, 0)
+func (stor *BasicStorage) GetMany(req storage.ShortenedBatch, _ context.Context) (storage.OriginalBatch, error) {
+	result := make(storage.OriginalBatch, 0)
 	for _, r := range req {
-		initURL, err := stor.Get(r.Body, nil)
+		initURL, err := stor.Get(r.ShortURL, nil)
 		if err != nil {
 			return result, err
 		}
-		result = append(result, storage.StringWithID{ID: r.ID, Body: initURL})
+		result = append(result, storage.OriginalData{CorrelationID: r.CorrelationID, OriginalURL: initURL})
 	}
 	return result, nil
 }
 
-func (stor *BasicStorage) PutMany(req storage.BatchRequest, _ context.Context) (storage.BatchResponse, error) {
-	result := make(storage.BatchResponse, 0)
+func (stor *BasicStorage) PutMany(req storage.OriginalBatch, _ context.Context) (storage.ShortenedBatch, error) {
+	result := make(storage.ShortenedBatch, 0)
 	for _, r := range req {
-		shortURL, err := stor.Put(r.Body, nil)
+		shortURL, err := stor.Put(r.OriginalURL, nil)
 		if err != nil {
 			return result, err
 		}
-		result = append(result, storage.StringWithID{ID: r.ID, Body: shortURL})
+		result = append(result, storage.ShortData{CorrelationID: r.CorrelationID, ShortURL: shortURL})
 	}
 	return result, nil
 }
@@ -268,14 +268,49 @@ func MakeJSONHandler(st storage.URLStorage) http.HandlerFunc {
 }
 
 // Batch handler
-type BatchReq struct {
-	CorrelationID string `json:"correlation_id"`
-	OriginalURL   string `json:"original_url"`
+func BatchHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
+	defer r.Body.Close()
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	reader, err := middleware.MakeDecompReader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	body, err := io.ReadAll(reader)
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	req := storage.OriginalBatch{}
+	err = json.Unmarshal(body, &req)
+	resp, err := st.PutMany(req, r.Context())
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	respJSON, err := json.Marshal(resp)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respJSON)))
+	w.WriteHeader(http.StatusCreated)
+	w.Write(respJSON)
 }
 
-type BatchResp struct {
-	CorrelationID string `json:"correlation_id"`
-	ShortURL      string `json:"short_url"`
+func MakeBatchHandler(st storage.URLStorage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		BatchHandler(w, r, st)
+	}
 }
 
 // Builder
@@ -288,7 +323,9 @@ func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonH
 	return r
 }
 
-func MakeRouter2(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc, pingHandler http.HandlerFunc, logger *zap.Logger, pl *sync.Pool) chi.Router {
+func MakeRouter2(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
+	jsonHandler http.HandlerFunc, pingHandler http.HandlerFunc, batchHandler http.HandlerFunc,
+	logger *zap.Logger, pl *sync.Pool) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.MakeLogHandler(logger))
@@ -296,8 +333,9 @@ func MakeRouter2(getHandler http.HandlerFunc, postHandler http.HandlerFunc, json
 	r.Get(`/{path}`, getHandler)
 	r.Group(func(rt chi.Router) {
 		rt.Use(middleware.MakeCompressHandler(pl))
-		r.Post(`/api/shorten`, jsonHandler)
 		r.Post(`/`, postHandler)
+		r.Post(`/api/shorten`, jsonHandler)
+		r.Post(`/api/shorten/batch`, batchHandler)
 	})
 	return r
 }

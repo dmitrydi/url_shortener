@@ -403,7 +403,8 @@ func TestRouterCompress2(t *testing.T) {
 	}
 	defer db.Close()
 	pingHandler := database.MakePingHandler(db)
-	tserver := httptest.NewServer(MakeRouter2(getHandler, postHandler, jsonHandler, pingHandler, logger, writerPool))
+	batchHandler := MakeBatchHandler(tstorage)
+	tserver := httptest.NewServer(MakeRouter2(getHandler, postHandler, jsonHandler, pingHandler, batchHandler, logger, writerPool))
 	defer tserver.Close()
 	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
 	resp, err := tserver.Client().Do(req)

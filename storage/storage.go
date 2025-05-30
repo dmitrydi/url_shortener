@@ -13,20 +13,35 @@ const (
 	ShortURLLen = 8
 )
 
-type StringWithID struct {
-	ID   string
-	Body string
+// type StringWithID struct {
+// 	ID   string `json:"correlation_id"`
+// 	Body string
+// }
+
+type OriginalData struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
 }
 
-type BatchRequest = []StringWithID
-type BatchResponse = []StringWithID
+type ShortData struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
+}
+
+/*
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+*/
+
+type OriginalBatch = []OriginalData
+type ShortenedBatch = []ShortData
 
 type URLStorage interface {
 	Put(string, context.Context) (string, error)
 	Get(string, context.Context) (string, error)
 	AddData(string, string) error
-	PutMany(BatchRequest, context.Context) (BatchResponse, error)
-	GetMany(BatchRequest, context.Context) (BatchResponse, error)
+	PutMany(OriginalBatch, context.Context) (ShortenedBatch, error)
+	GetMany(ShortenedBatch, context.Context) (OriginalBatch, error)
 	Close() error
 }
 

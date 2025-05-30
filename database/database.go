@@ -85,19 +85,19 @@ func (d *DBStorage) Get(short_url string, ctx context.Context) (string, error) {
 	return init_url, nil
 }
 
-func (d *DBStorage) PutMany(req storage.BatchRequest, ctx context.Context) (storage.BatchResponse, error) {
+func (d *DBStorage) PutMany(req storage.OriginalBatch, ctx context.Context) (storage.ShortenedBatch, error) {
 	if len(req) == 0 {
 		return nil, errors.New("empty batch")
 	}
-	result := make(storage.BatchResponse, 0)
+	result := make(storage.ShortenedBatch, 0)
 	var sb strings.Builder
 	for idx, r := range req {
 		randURL := helpers.MakeRandomString(storage.ShortURLLen)
-		result = append(result, storage.StringWithID{ID: r.ID, Body: d.rootPrefix + randURL})
+		result = append(result, storage.ShortData{CorrelationID: r.CorrelationID, ShortURL: d.rootPrefix + randURL})
 		if idx > 0 {
-			sb.WriteString(fmt.Sprintf(", ('%s', '%s')", randURL, r.Body))
+			sb.WriteString(fmt.Sprintf(", ('%s', '%s')", randURL, r.OriginalURL))
 		} else {
-			sb.WriteString(fmt.Sprintf("('%s', '%s')", randURL, r.Body))
+			sb.WriteString(fmt.Sprintf("('%s', '%s')", randURL, r.OriginalURL))
 		}
 	}
 
@@ -109,19 +109,19 @@ func (d *DBStorage) PutMany(req storage.BatchRequest, ctx context.Context) (stor
 	return result, nil
 }
 
-func MakeGetList(req storage.BatchRequest) string {
+func MakeGetList(req storage.ShortenedBatch) string {
 	var sb strings.Builder
 	for idx, r := range req {
 		if idx > 0 {
-			sb.WriteString(fmt.Sprintf(", '%s'", r.Body))
+			sb.WriteString(fmt.Sprintf(", '%s'", r.ShortURL))
 		} else {
-			sb.WriteString(fmt.Sprintf("'%s'", r.Body))
+			sb.WriteString(fmt.Sprintf("'%s'", r.ShortURL))
 		}
 	}
 	return sb.String()
 }
 
-func (d *DBStorage) GetMany(req storage.BatchRequest, ctx context.Context) (storage.BatchResponse, error) {
+func (d *DBStorage) GetMany(req storage.ShortenedBatch, ctx context.Context) (storage.OriginalBatch, error) {
 	if len(req) == 0 {
 		return nil, errors.New("empty batch")
 	}
@@ -130,7 +130,7 @@ func (d *DBStorage) GetMany(req storage.BatchRequest, ctx context.Context) (stor
 		return nil, err
 	}
 	defer rows.Close()
-	result := make(storage.BatchResponse, 0)
+	result := make(storage.OriginalBatch, 0)
 	var idx int
 	for rows.Next() {
 		var initURL string
@@ -138,7 +138,7 @@ func (d *DBStorage) GetMany(req storage.BatchRequest, ctx context.Context) (stor
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, storage.StringWithID{ID: req[idx].ID, Body: initURL})
+		result = append(result, storage.OriginalData{CorrelationID: req[idx].CorrelationID, OriginalURL: initURL})
 		idx++
 	}
 	return result, nil

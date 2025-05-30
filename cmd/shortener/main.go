@@ -55,6 +55,7 @@ func main() {
 	}
 
 	r := server.MakeRouter2(server.MakeGetHandler(s),
-		server.MakePostHandler(s), server.MakeJSONHandler(s), database.MakePingHandler(db), logger, writerPool)
+		server.MakePostHandler(s), server.MakeJSONHandler(s), database.MakePingHandler(db), server.MakeBatchHandler(s),
+		logger, writerPool)
 	log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
 }
