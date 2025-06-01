@@ -11,6 +11,7 @@ import (
 
 	"strings"
 
+	"github.com/dmitrydi/url_shortener/database"
 	"github.com/dmitrydi/url_shortener/internal/helpers"
 	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
@@ -193,13 +194,22 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 		return
 	}
 	shortURL, err := st.Put(bodyString, r.Context())
+	var status int
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		var dupErr *database.DuplicateError
+		if errors.As(err, &dupErr) {
+			status = http.StatusConflict
+		} else {
+			fmt.Println("PostHandler: error ", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else {
+		status = http.StatusCreated
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(shortURL)))
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(status)
 	w.Write([]byte(shortURL))
 }
 
@@ -246,18 +256,28 @@ func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 	}
 	var resp = JSONResp{}
 	resp.Result, err = st.Put(req.URL, r.Context())
+	var status int
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		var dupErr *database.DuplicateError
+		if errors.As(err, &dupErr) {
+			status = http.StatusConflict
+		} else {
+			fmt.Println("PostHandler: error ", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else {
+		status = http.StatusCreated
 	}
 	respJSON, err := json.Marshal(resp)
 	if err != nil {
+		fmt.Println("json error ", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respJSON)))
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(status)
 	w.Write(respJSON)
 }
 

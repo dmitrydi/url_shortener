@@ -11,6 +11,8 @@ import (
 
 	"github.com/dmitrydi/url_shortener/internal/helpers"
 	"github.com/dmitrydi/url_shortener/storage"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const (
@@ -57,19 +59,46 @@ func NewDBStorage(db *sql.DB, prefix string) (*DBStorage, error) {
 	res := DBStorage{db: db, rootPrefix: prefix}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS urls ("short_url" TEXT PRIMARY KEY, "init_url" TEXT NOT NULL)`)
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS urls ("short_url" TEXT PRIMARY KEY, "init_url" TEXT UNIQUE NOT NULL)`)
 	if err != nil {
 		return nil, err
 	}
 	return &res, nil
 }
 
+type DuplicateError struct {
+}
+
+func NewDuplicateError() *DuplicateError {
+	return &DuplicateError{}
+}
+
+func (e *DuplicateError) Error() string {
+	return ""
+}
+
 func (d *DBStorage) Put(init_url string, ctx context.Context) (string, error) {
 	randURL := helpers.MakeRandomString(storage.ShortURLLen)
 	_, err := d.db.ExecContext(ctx, `INSERT INTO urls VALUES ($1, $2)`, randURL, init_url)
 	if err != nil {
-		fmt.Println("Put error, ", err)
-		return "", err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == pgerrcode.UniqueViolation {
+				row := d.db.QueryRowContext(ctx, `SELECT (short_url) FROM urls WHERE init_url = $1`, init_url)
+				var short_url string
+				err = row.Scan(&short_url)
+				if err != nil {
+					fmt.Println("Put: scan error ", err)
+					return "", err
+				}
+				return d.rootPrefix + short_url, NewDuplicateError()
+			} else {
+				return "", pgErr
+			}
+		} else {
+			fmt.Println("DBStorage::Put: not PgError, ", err)
+			return "", err
+		}
 	}
 	return d.rootPrefix + randURL, nil
 }
