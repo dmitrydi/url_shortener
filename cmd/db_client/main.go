@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
-	"time"
 
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -26,12 +28,19 @@ func main() {
 		log.Fatal("could not ping db")
 	}
 
-	fmt.Println("Successfully ping DB")
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	_, err = db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS dummy2 (short_url TEXT NOT NULL, init_url TEXT NOT NULL)")
+	_, err = db.ExecContext(context.Background(), "INSERT INTO urls2 VALUES('a1', 'b1')")
+	var pgErr *pgconn.PgError
 	if err != nil {
-		log.Fatal(err)
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == pgerrcode.UniqueViolation {
+				log.Println("Unique violation")
+			} else {
+				log.Println("Error code ", pgErr.Code)
+			}
+		} else {
+			log.Println("Error is not pqErr, ", err)
+		}
+	} else {
+		log.Println("err is nil")
 	}
-	fmt.Println("Created table")
 }
