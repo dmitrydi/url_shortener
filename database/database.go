@@ -103,18 +103,29 @@ func (d *DBStorage) Put(init_url string, ctx context.Context) (string, error) {
 	return d.rootPrefix + randURL, nil
 }
 
-func (d *DBStorage) Get(short_url string, ctx context.Context) (string, error) {
-	row := d.db.QueryRowContext(ctx, `SELECT (init_url) FROM urls WHERE short_url = $1`, short_url)
-	var init_url string
-	err := row.Scan(&init_url)
-	if err != nil {
-		fmt.Println("Get error, ", err)
-		return "", err
+func (d *DBStorage) PutMany(req storage.OriginalBatch, ctx context.Context) (storage.ShortenedBatch, error) {
+	if len(req) == 0 {
+		return nil, errors.New("empty batch")
 	}
-	return init_url, nil
+	result := make(storage.ShortenedBatch, 0)
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return result, err
+	}
+	for _, r := range req {
+		randURL := helpers.MakeRandomString(storage.ShortURLLen)
+		_, err = d.db.ExecContext(ctx, `INSERT INTO urls VALUES ($1, $2)`, randURL, r.OriginalURL)
+		if err != nil {
+			tx.Rollback()
+			return result, err
+		}
+		result = append(result, storage.ShortData{CorrelationID: r.CorrelationID, ShortURL: d.rootPrefix + randURL})
+	}
+
+	return result, tx.Commit()
 }
 
-func (d *DBStorage) PutMany(req storage.OriginalBatch, ctx context.Context) (storage.ShortenedBatch, error) {
+func (d *DBStorage) PutMany2(req storage.OriginalBatch, ctx context.Context) (storage.ShortenedBatch, error) {
 	if len(req) == 0 {
 		return nil, errors.New("empty batch")
 	}
@@ -142,6 +153,17 @@ func (d *DBStorage) PutMany(req storage.OriginalBatch, ctx context.Context) (sto
 		return nil, err
 	}
 	return result, nil
+}
+
+func (d *DBStorage) Get(short_url string, ctx context.Context) (string, error) {
+	row := d.db.QueryRowContext(ctx, `SELECT (init_url) FROM urls WHERE short_url = $1`, short_url)
+	var init_url string
+	err := row.Scan(&init_url)
+	if err != nil {
+		fmt.Println("Get error, ", err)
+		return "", err
+	}
+	return init_url, nil
 }
 
 func MakeGetList(req storage.ShortenedBatch) string {
