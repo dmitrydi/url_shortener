@@ -310,10 +310,14 @@ func BatchHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage)
 
 	req := storage.OriginalBatch{}
 	err = json.Unmarshal(body, &req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	resp, err := st.PutMany(req, r.Context())
 
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	respJSON, err := json.Marshal(resp)

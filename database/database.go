@@ -15,12 +15,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-const (
-	tableName = "urls"
-	keyName   = `"short_url"`
-	valueName = `"init_url"`
-)
-
 func PingHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusBadRequest)
@@ -77,21 +71,21 @@ func (e *DuplicateError) Error() string {
 	return ""
 }
 
-func (d *DBStorage) Put(init_url string, ctx context.Context) (string, error) {
+func (d *DBStorage) Put(initURL string, ctx context.Context) (string, error) {
 	randURL := helpers.MakeRandomString(storage.ShortURLLen)
-	_, err := d.db.ExecContext(ctx, `INSERT INTO urls VALUES ($1, $2)`, randURL, init_url)
+	_, err := d.db.ExecContext(ctx, `INSERT INTO urls VALUES ($1, $2)`, randURL, initURL)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == pgerrcode.UniqueViolation {
-				row := d.db.QueryRowContext(ctx, `SELECT (short_url) FROM urls WHERE init_url = $1`, init_url)
-				var short_url string
-				err = row.Scan(&short_url)
+				row := d.db.QueryRowContext(ctx, `SELECT (short_url) FROM urls WHERE init_url = $1`, initURL)
+				var shortURL string
+				err = row.Scan(&shortURL)
 				if err != nil {
 					fmt.Println("Put: scan error ", err)
 					return "", err
 				}
-				return d.rootPrefix + short_url, NewDuplicateError()
+				return d.rootPrefix + shortURL, NewDuplicateError()
 			} else {
 				return "", pgErr
 			}
@@ -125,45 +119,15 @@ func (d *DBStorage) PutMany(req storage.OriginalBatch, ctx context.Context) (sto
 	return result, tx.Commit()
 }
 
-func (d *DBStorage) PutMany2(req storage.OriginalBatch, ctx context.Context) (storage.ShortenedBatch, error) {
-	if len(req) == 0 {
-		return nil, errors.New("empty batch")
-	}
-	result := make(storage.ShortenedBatch, 0)
-	var sb strings.Builder
-	for idx, r := range req {
-		randURL := helpers.MakeRandomString(storage.ShortURLLen)
-		result = append(result, storage.ShortData{CorrelationID: r.CorrelationID, ShortURL: d.rootPrefix + randURL})
-		if idx > 0 {
-			sb.WriteString(fmt.Sprintf(", ('%s', '%s')", randURL, r.OriginalURL))
-		} else {
-			sb.WriteString(fmt.Sprintf("('%s', '%s')", randURL, r.OriginalURL))
-		}
-	}
-
-	ss := sb.String()
-
-	fmt.Println("Put many ss: ", ss)
-
-	s2 := fmt.Sprintf("INSERT INTO urls VALUES %s", ss)
-
-	_, err := d.db.ExecContext(ctx, s2)
-	if err != nil {
-		fmt.Println("PutMany error, ", err)
-		return nil, err
-	}
-	return result, nil
-}
-
-func (d *DBStorage) Get(short_url string, ctx context.Context) (string, error) {
-	row := d.db.QueryRowContext(ctx, `SELECT (init_url) FROM urls WHERE short_url = $1`, short_url)
-	var init_url string
-	err := row.Scan(&init_url)
+func (d *DBStorage) Get(shortURL string, ctx context.Context) (string, error) {
+	row := d.db.QueryRowContext(ctx, `SELECT (init_url) FROM urls WHERE short_url = $1`, shortURL)
+	var initURL string
+	err := row.Scan(&initURL)
 	if err != nil {
 		fmt.Println("Get error, ", err)
 		return "", err
 	}
-	return init_url, nil
+	return initURL, nil
 }
 
 func MakeGetList(req storage.ShortenedBatch) string {
@@ -184,6 +148,9 @@ func (d *DBStorage) GetMany(req storage.ShortenedBatch, ctx context.Context) (st
 	}
 	rows, err := d.db.QueryContext(ctx, `SELECT (init_url) FROM urls WHERE short_url in ($1)`, MakeGetList(req))
 	if err != nil {
+		return nil, err
+	}
+	if rows.Err() != nil {
 		return nil, err
 	}
 	defer rows.Close()
