@@ -36,3 +36,5 @@ replace github.com/dmitrydi/url_shortener/server => ../../server
 replace github.com/dmitrydi/url_shortener/middleware => ../../middleware
 
 replace github.com/dmitrydi/url_shortener/database => ../../database
+
+replace github.com/dmitrydi/url_shortener/handlers => ../../handlers
