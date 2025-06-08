@@ -17,12 +17,21 @@ import (
 	"github.com/dmitrydi/url_shortener/internal/gl"
 	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+func MakeTestRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc) chi.Router {
+	r := chi.NewRouter()
+	r.Get(`/{path}`, getHandler)
+	r.Post(`/api/shorten`, jsonHandler)
+	r.Post(`/`, postHandler)
+	return r
+}
 
 func TestBasicStorage(t *testing.T) {
 	prefix := "prefix/"
@@ -298,7 +307,7 @@ func TestRouter(t *testing.T) {
 		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer tstorage.Close()
-	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
+	tserver := httptest.NewServer(MakeTestRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
 	defer tserver.Close()
 	postResp, postBody := testRequest(t, tserver, http.MethodPost, "/", initURL)
 	defer postResp.Body.Close()
@@ -319,7 +328,7 @@ func TestRouterJSONApi(t *testing.T) {
 		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer tstorage.Close()
-	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
+	tserver := httptest.NewServer(MakeTestRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
 	defer tserver.Close()
 	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
 	resp, err := tserver.Client().Do(req)
@@ -354,7 +363,7 @@ func TestRouterCompress(t *testing.T) {
 	getHandler := middleware.CompressHandler(MakeGetHandler(tstorage), writerPool)
 	postHandler := middleware.CompressHandler(MakePostHandler(tstorage), writerPool)
 	jsonHandler := middleware.CompressHandler(MakeJSONHandler(tstorage), writerPool)
-	tserver := httptest.NewServer(MakeRouter(getHandler, postHandler, jsonHandler))
+	tserver := httptest.NewServer(MakeTestRouter(getHandler, postHandler, jsonHandler))
 	defer tserver.Close()
 	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
 	resp, err := tserver.Client().Do(req)
@@ -404,7 +413,7 @@ func TestRouterCompress2(t *testing.T) {
 	defer db.Close()
 	pingHandler := database.MakePingHandler(db)
 	batchHandler := MakeBatchHandler(tstorage)
-	tserver := httptest.NewServer(MakeRouter2(getHandler, postHandler, jsonHandler, pingHandler, batchHandler, logger, writerPool))
+	tserver := httptest.NewServer(MakeRouter(getHandler, postHandler, jsonHandler, pingHandler, batchHandler, logger, writerPool))
 	defer tserver.Close()
 	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
 	resp, err := tserver.Client().Do(req)

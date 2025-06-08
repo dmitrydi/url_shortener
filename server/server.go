@@ -339,15 +339,7 @@ func MakeBatchHandler(st storage.URLStorage) http.HandlerFunc {
 
 // Builder
 
-func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc) chi.Router {
-	r := chi.NewRouter()
-	r.Get(`/{path}`, getHandler)
-	r.Post(`/api/shorten`, jsonHandler)
-	r.Post(`/`, postHandler)
-	return r
-}
-
-func MakeRouter2(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
+func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
 	jsonHandler http.HandlerFunc, pingHandler http.HandlerFunc, batchHandler http.HandlerFunc,
 	logger *zap.Logger, pl *sync.Pool) chi.Router {
 	r := chi.NewRouter()

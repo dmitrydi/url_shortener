@@ -54,7 +54,7 @@ func main() {
 		},
 	}
 
-	r := server.MakeRouter2(server.MakeGetHandler(s),
+	r := server.MakeRouter(server.MakeGetHandler(s),
 		server.MakePostHandler(s), server.MakeJSONHandler(s), database.MakePingHandler(db), server.MakeBatchHandler(s),
 		logger, writerPool)
 	gl.Log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
