@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/dmitrydi/url_shortener/database"
+	"github.com/dmitrydi/url_shortener/internal/gl"
 	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +30,7 @@ func TestBasicStorage(t *testing.T) {
 	pfile := "./dummy.out"
 	stor, err := NewBasicStorage(prefix, pfile)
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer stor.Close()
 	shortURL, err := stor.Put(initURL, nil)
@@ -46,7 +46,7 @@ func TestPostHandler(t *testing.T) {
 	pfile := "./dummy.out"
 	storage, err := NewBasicStorage(prefix, pfile)
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer storage.Close()
 	type want struct {
@@ -116,7 +116,7 @@ func TestGetHandler(t *testing.T) {
 	pfile := "./dummy.out"
 	stor, err := NewBasicStorage(prefix, pfile)
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer stor.Close()
 	randomPath := storage.MakeRandomString(8)
@@ -202,7 +202,7 @@ func TestJSONHandler(t *testing.T) {
 	pfile := "./dummy.out"
 	storage, err := NewBasicStorage(prefix, pfile)
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer storage.Close()
 	w := httptest.NewRecorder()
@@ -229,7 +229,7 @@ func TestJSONHandlerBad(t *testing.T) {
 	pfile := "./dummy.out"
 	storage, err := NewBasicStorage(prefix, pfile)
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer storage.Close()
 	w := httptest.NewRecorder()
@@ -266,11 +266,11 @@ func makeJSONRequest(method string, path string, initURL string) *http.Request {
 	jreq := JSONReq{initURL}
 	bt, err := json.Marshal(jreq)
 	if err != nil {
-		log.Fatal("makeJSONRequest: json.Marshal")
+		gl.Log.Fatal("makeJSONRequest: json.Marshal")
 	}
 	req, err := http.NewRequest(method, path, bytes.NewBuffer(bt))
 	if err != nil {
-		log.Fatal("http.NewRequest ", err)
+		gl.Log.Fatal("http.NewRequest ", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	return req
@@ -280,11 +280,11 @@ func makeBadJSONRequest(method string, path string, initURL string) *http.Reques
 	jreq := BadJSONRequest{initURL}
 	bt, err := json.Marshal(jreq)
 	if err != nil {
-		log.Fatal("makeJSONRequest: json.Marshal")
+		gl.Log.Fatal("makeJSONRequest: json.Marshal")
 	}
 	req, err := http.NewRequest(method, path, bytes.NewBuffer(bt))
 	if err != nil {
-		log.Fatal("http.NewRequest ", err)
+		gl.Log.Fatal("http.NewRequest ", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	return req
@@ -295,7 +295,7 @@ func TestRouter(t *testing.T) {
 	initURL := "www.ya.ru"
 	tstorage, err := NewBasicStorage(hostPrefix, "./dummy.out")
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer tstorage.Close()
 	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
@@ -316,7 +316,7 @@ func TestRouterJSONApi(t *testing.T) {
 	initURL := "www.ya.ru"
 	tstorage, err := NewBasicStorage(hostPrefix, "./dummy.out")
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer tstorage.Close()
 	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
@@ -342,7 +342,7 @@ func TestRouterCompress(t *testing.T) {
 	initURL := "www.ya.ru"
 	tstorage, err := NewBasicStorage(hostPrefix, "./dummy.out")
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer tstorage.Close()
 	writerPool := &sync.Pool{
@@ -376,7 +376,7 @@ func TestRouterCompress2(t *testing.T) {
 	initURL := "www.ya.ru"
 	tstorage, err := NewBasicStorage(hostPrefix, "./dummy.out")
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer tstorage.Close()
 	writerPool := &sync.Pool{
@@ -387,7 +387,7 @@ func TestRouterCompress2(t *testing.T) {
 	}
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		log.Fatal(err)
+		gl.Log.Fatal(err)
 	}
 	defer logger.Sync()
 
@@ -399,7 +399,7 @@ func TestRouterCompress2(t *testing.T) {
 
 	db, err := sql.Open("pgx", ps)
 	if err != nil {
-		log.Fatal(err)
+		gl.Log.Fatal(err)
 	}
 	defer db.Close()
 	pingHandler := database.MakePingHandler(db)

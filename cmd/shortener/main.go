@@ -4,12 +4,12 @@ import (
 	"compress/gzip"
 	"database/sql"
 	"flag"
-	"log"
 	"net/http"
 	"sync"
 
 	"github.com/dmitrydi/url_shortener/config"
 	"github.com/dmitrydi/url_shortener/database"
+	"github.com/dmitrydi/url_shortener/internal/gl"
 	"github.com/dmitrydi/url_shortener/server"
 	"github.com/dmitrydi/url_shortener/storage"
 	"go.uber.org/zap"
@@ -25,7 +25,7 @@ func main() {
 	if len(*config.DBPrompt) > 0 {
 		db, err = sql.Open("pgx", *config.DBPrompt)
 		if err != nil {
-			log.Fatal(err)
+			gl.Log.Fatal(err)
 		}
 		defer db.Close()
 		s, err = database.NewDBStorage(db, *config.URLPrefix)
@@ -35,20 +35,20 @@ func main() {
 
 	}
 	if err != nil {
-		log.Fatal("Could not initialize storage ", err.Error())
+		gl.Log.Fatal("Could not initialize storage ", err.Error())
 	}
 
 	defer s.Close()
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		log.Fatal(err)
+		gl.Log.Fatal(err)
 	}
 	defer logger.Sync()
 	writerPool := &sync.Pool{
 		New: func() any {
 			writer, err := gzip.NewWriterLevel(nil, gzip.BestSpeed)
 			if err != nil {
-				log.Fatal("Could not create gzip writer ", err.Error())
+				gl.Log.Fatal("Could not create gzip writer ", err.Error())
 			}
 			return writer
 		},
@@ -57,5 +57,5 @@ func main() {
 	r := server.MakeRouter2(server.MakeGetHandler(s),
 		server.MakePostHandler(s), server.MakeJSONHandler(s), database.MakePingHandler(db), server.MakeBatchHandler(s),
 		logger, writerPool)
-	log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
+	gl.Log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
 }
