@@ -16,14 +16,6 @@ import (
 )
 
 func PingHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	if db == nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	err := db.PingContext(ctx)
@@ -35,6 +27,11 @@ func PingHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 }
 
 func MakePingHandler(db *sql.DB) http.HandlerFunc {
+	if db == nil {
+		return func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		PingHandler(w, r, db)
 	}
@@ -61,14 +58,15 @@ func NewDBStorage(db *sql.DB, prefix string) (*DBStorage, error) {
 }
 
 type DuplicateError struct {
+	ExistingKey string
 }
 
-func NewDuplicateError() *DuplicateError {
-	return &DuplicateError{}
+func NewDuplicateError(existingKey string) *DuplicateError {
+	return &DuplicateError{ExistingKey: existingKey}
 }
 
 func (e *DuplicateError) Error() string {
-	return ""
+	return e.ExistingKey
 }
 
 func (d *DBStorage) Put(initURL string, ctx context.Context) (string, error) {
@@ -85,7 +83,7 @@ func (d *DBStorage) Put(initURL string, ctx context.Context) (string, error) {
 					fmt.Println("Put: scan error ", err)
 					return "", err
 				}
-				return d.rootPrefix + shortURL, NewDuplicateError()
+				return d.rootPrefix + shortURL, NewDuplicateError(initURL)
 			} else {
 				return "", pgErr
 			}
