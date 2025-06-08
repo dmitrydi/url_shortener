@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"math/rand"
@@ -13,11 +12,6 @@ const (
 	ShortURLLen = 8
 )
 
-// type StringWithID struct {
-// 	ID   string `json:"correlation_id"`
-// 	Body string
-// }
-
 type OriginalData struct {
 	CorrelationID string `json:"correlation_id"`
 	OriginalURL   string `json:"original_url"`
@@ -28,21 +22,14 @@ type ShortData struct {
 	ShortURL      string `json:"short_url"`
 }
 
-/*
-	CorrelationID string `json:"correlation_id"`
-	OriginalURL   string `json:"original_url"`
-*/
-
 type OriginalBatch = []OriginalData
 type ShortenedBatch = []ShortData
 
 type URLStorage interface {
 	Put(string, context.Context) (string, error)
 	Get(string, context.Context) (string, error)
-	AddData(string, string) error
 	PutMany(OriginalBatch, context.Context) (ShortenedBatch, error)
 	GetMany(ShortenedBatch, context.Context) (OriginalBatch, error)
-	Close() error
 }
 
 func MakeRandomString(n int) string {
@@ -60,8 +47,8 @@ type Producer struct {
 }
 
 type Persister struct {
-	filename string
-	producer *Producer
+	Filename string
+	Producer *Producer
 }
 
 type URLEntry struct {
@@ -75,35 +62,11 @@ func NewPersister(filename string) (*Persister, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Persister{filename: filename, producer: &Producer{file: file}}, nil
+	return &Persister{Filename: filename, Producer: &Producer{file: file}}, nil
 }
 
 func (p *Persister) Close() error {
-	return p.producer.file.Close()
-}
-
-func (p *Persister) Restore(storage URLStorage) (uint, error) {
-	file, err := os.OpenFile(p.filename, os.O_RDONLY|os.O_CREATE, 0666)
-	var lastID uint
-	if err != nil {
-		return lastID, err
-	}
-	scanner := bufio.NewScanner(file)
-	for {
-		if !scanner.Scan() {
-			return lastID, scanner.Err()
-		}
-		data := scanner.Bytes()
-		entry := URLEntry{}
-		err := json.Unmarshal(data, &entry)
-		if err != nil {
-			return 0, err
-		}
-		storage.AddData(entry.ShortURL, entry.InitURL)
-		if entry.ID > lastID {
-			lastID = entry.ID
-		}
-	}
+	return p.Producer.file.Close()
 }
 
 func (p *Persister) Add(id uint, shortURL string, initURL string) error {
@@ -113,7 +76,7 @@ func (p *Persister) Add(id uint, shortURL string, initURL string) error {
 		return err
 	}
 	data = append(data, '\n')
-	if _, err = p.producer.file.Write(data); err != nil {
+	if _, err = p.Producer.file.Write(data); err != nil {
 		return err
 	}
 	return nil

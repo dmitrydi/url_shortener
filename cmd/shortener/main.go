@@ -11,51 +11,73 @@ import (
 	"github.com/dmitrydi/url_shortener/database"
 	"github.com/dmitrydi/url_shortener/internal/gl"
 	"github.com/dmitrydi/url_shortener/server"
-	"github.com/dmitrydi/url_shortener/storage"
 	"go.uber.org/zap"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
-	flag.Parse()
-	var db *sql.DB
-	var s storage.URLStorage
-	var err error
-	if len(*config.DBPrompt) > 0 {
-		db, err = sql.Open("pgx", *config.DBPrompt)
-		if err != nil {
-			gl.Log.Fatal(err)
-		}
-		defer db.Close()
-		s, err = database.NewDBStorage(db, *config.URLPrefix)
-	} else {
 
-		s, err = server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
-
-	}
-	if err != nil {
-		gl.Log.Fatal("Could not initialize storage ", err.Error())
-	}
-
-	defer s.Close()
 	logger, err := zap.NewDevelopment()
 	if err != nil {
 		gl.Log.Fatal(err)
 	}
 	defer logger.Sync()
+
+	var (
+		getHandler   http.HandlerFunc
+		postHandler  http.HandlerFunc
+		jsonHandler  http.HandlerFunc
+		pingHandler  http.HandlerFunc
+		batchHandler http.HandlerFunc
+	)
+
+	flag.Parse()
+
+	if len(*config.DBPrompt) > 0 {
+		db, err := sql.Open("pgx", *config.DBPrompt)
+		if err != nil {
+			logger.Fatal(err.Error())
+		}
+		defer db.Close()
+		s, err := database.NewDBStorage(db, *config.URLPrefix)
+		if err != nil {
+			logger.Fatal(err.Error())
+		}
+		getHandler = server.MakeGetHandler(s)
+		postHandler = server.MakePostHandler(s)
+		jsonHandler = server.MakeJSONHandler(s)
+		pingHandler = database.MakePingHandler(db)
+		batchHandler = server.MakeBatchHandler(s)
+	} else {
+
+		s, err := server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
+		if err != nil {
+			logger.Fatal(err.Error())
+		}
+		getHandler = server.MakeGetHandler(s)
+		postHandler = server.MakePostHandler(s)
+		jsonHandler = server.MakeJSONHandler(s)
+		pingHandler = database.MakePingHandler(nil)
+		batchHandler = server.MakeBatchHandler(s)
+		defer s.Close()
+	}
+	if err != nil {
+		logger.Sugar().Fatal("Could not initialize storage ", err)
+	}
+
 	writerPool := &sync.Pool{
 		New: func() any {
 			writer, err := gzip.NewWriterLevel(nil, gzip.BestSpeed)
 			if err != nil {
-				gl.Log.Fatal("Could not create gzip writer ", err.Error())
+				logger.Sugar().Fatal("Could not create gzip writer ", err)
 			}
 			return writer
 		},
 	}
 
-	r := server.MakeRouter(server.MakeGetHandler(s),
-		server.MakePostHandler(s), server.MakeJSONHandler(s), database.MakePingHandler(db), server.MakeBatchHandler(s),
+	r := server.MakeRouter(getHandler,
+		postHandler, jsonHandler, pingHandler, batchHandler,
 		logger, writerPool)
-	gl.Log.Fatal(http.ListenAndServe(*config.ServerAddr, r))
+	logger.Fatal(http.ListenAndServe(*config.ServerAddr, r).Error())
 }

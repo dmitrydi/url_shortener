@@ -165,16 +165,3 @@ func (d *DBStorage) GetMany(req storage.ShortenedBatch, ctx context.Context) (st
 	}
 	return result, nil
 }
-
-/*PutMany(BatchRequest, context.Context) (BatchResponse, error)
-GetMany(BatchRequest, context.Context) (BatchResponse, error)
-
-*/
-
-func (*DBStorage) AddData(_ string, _ string) error {
-	return nil
-}
-
-func (*DBStorage) Close() error {
-	return nil
-}

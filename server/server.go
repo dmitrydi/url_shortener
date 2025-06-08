@@ -1,12 +1,14 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sync"
 
 	"strings"
@@ -40,14 +42,11 @@ func NewBasicStorage(rootPrefix string, persistPath string) (*BasicStorage, erro
 	if err != nil {
 		return ret, err
 	}
-	if p != nil {
-		lastID, err := p.Restore(ret)
-		if err != nil {
-			return ret, err
-		}
-		ret.lastID = lastID
-	}
 	ret.persister = p
+	err = ret.Restore()
+	if err != nil {
+		return nil, err
+	}
 	return ret, nil
 }
 
@@ -56,6 +55,31 @@ func MakeBasicStorage(rootPrefix string) BasicStorage {
 	ret.rootPrefix = rootPrefix
 	ret.data = make(map[string]string)
 	return ret
+}
+
+func (stor *BasicStorage) Restore() error {
+	file, err := os.OpenFile(stor.persister.Filename, os.O_RDONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	var lastID uint
+	scanner := bufio.NewScanner(file)
+	for {
+		if !scanner.Scan() {
+			return scanner.Err()
+		}
+		data := scanner.Bytes()
+		entry := storage.URLEntry{}
+		err := json.Unmarshal(data, &entry)
+		if err != nil {
+			return err
+		}
+		stor.AddData(entry.ShortURL, entry.InitURL)
+		if entry.ID > lastID {
+			stor.lastID = entry.ID
+		}
+	}
+
 }
 
 func (stor *BasicStorage) Put(initURL string, _ context.Context) (string, error) {
