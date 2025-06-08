@@ -69,7 +69,7 @@ func (e *DuplicateError) Error() string {
 	return e.ExistingKey
 }
 
-func (d *DBStorage) Put(initURL string, ctx context.Context) (string, error) {
+func (d *DBStorage) Put(ctx context.Context, initURL string) (string, error) {
 	randURL := helpers.MakeRandomString(storage.ShortURLLen)
 	_, err := d.db.ExecContext(ctx, `INSERT INTO urls VALUES ($1, $2)`, randURL, initURL)
 	if err != nil {
@@ -95,7 +95,7 @@ func (d *DBStorage) Put(initURL string, ctx context.Context) (string, error) {
 	return d.rootPrefix + randURL, nil
 }
 
-func (d *DBStorage) PutMany(req storage.OriginalBatch, ctx context.Context) (storage.ShortenedBatch, error) {
+func (d *DBStorage) PutMany(ctx context.Context, req storage.OriginalBatch) (storage.ShortenedBatch, error) {
 	if len(req) == 0 {
 		return nil, errors.New("empty batch")
 	}
@@ -117,7 +117,7 @@ func (d *DBStorage) PutMany(req storage.OriginalBatch, ctx context.Context) (sto
 	return result, tx.Commit()
 }
 
-func (d *DBStorage) Get(shortURL string, ctx context.Context) (string, error) {
+func (d *DBStorage) Get(ctx context.Context, shortURL string) (string, error) {
 	row := d.db.QueryRowContext(ctx, `SELECT (init_url) FROM urls WHERE short_url = $1`, shortURL)
 	var initURL string
 	err := row.Scan(&initURL)
@@ -140,7 +140,7 @@ func MakeGetList(req storage.ShortenedBatch) string {
 	return sb.String()
 }
 
-func (d *DBStorage) GetMany(req storage.ShortenedBatch, ctx context.Context) (storage.OriginalBatch, error) {
+func (d *DBStorage) GetMany(ctx context.Context, req storage.ShortenedBatch) (storage.OriginalBatch, error) {
 	if len(req) == 0 {
 		return nil, errors.New("empty batch")
 	}

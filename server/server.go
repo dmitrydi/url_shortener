@@ -82,7 +82,7 @@ func (stor *BasicStorage) Restore() error {
 
 }
 
-func (stor *BasicStorage) Put(initURL string, _ context.Context) (string, error) {
+func (stor *BasicStorage) Put(_ context.Context, initURL string) (string, error) {
 	var randURL string
 	for {
 		randURL = helpers.MakeRandomString(storage.ShortURLLen)
@@ -104,7 +104,7 @@ func (stor *BasicStorage) Close() error {
 	return stor.persister.Close()
 }
 
-func (stor *BasicStorage) Get(shortURL string, _ context.Context) (string, error) {
+func (stor *BasicStorage) Get(_ context.Context, shortURL string) (string, error) {
 	val, ok := stor.data[shortURL]
 	if !ok {
 		return "", errors.New("url not exists")
@@ -112,10 +112,10 @@ func (stor *BasicStorage) Get(shortURL string, _ context.Context) (string, error
 	return val, nil
 }
 
-func (stor *BasicStorage) GetMany(req storage.ShortenedBatch, _ context.Context) (storage.OriginalBatch, error) {
+func (stor *BasicStorage) GetMany(c context.Context, req storage.ShortenedBatch) (storage.OriginalBatch, error) {
 	result := make(storage.OriginalBatch, 0)
 	for _, r := range req {
-		initURL, err := stor.Get(r.ShortURL, nil)
+		initURL, err := stor.Get(c, r.ShortURL)
 		if err != nil {
 			return result, err
 		}
@@ -124,10 +124,10 @@ func (stor *BasicStorage) GetMany(req storage.ShortenedBatch, _ context.Context)
 	return result, nil
 }
 
-func (stor *BasicStorage) PutMany(req storage.OriginalBatch, _ context.Context) (storage.ShortenedBatch, error) {
+func (stor *BasicStorage) PutMany(c context.Context, req storage.OriginalBatch) (storage.ShortenedBatch, error) {
 	result := make(storage.ShortenedBatch, 0)
 	for _, r := range req {
-		shortURL, err := stor.Put(r.OriginalURL, nil)
+		shortURL, err := stor.Put(c, r.OriginalURL)
 		if err != nil {
 			return result, err
 		}
@@ -173,7 +173,7 @@ func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	res, err := st.Get(url[1], r.Context())
+	res, err := st.Get(r.Context(), url[1])
 	if err == nil {
 		w.Header().Set("Location", res)
 		w.WriteHeader(http.StatusTemporaryRedirect)
@@ -186,10 +186,6 @@ func MakeGetHandler(st storage.URLStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		GetHandler(w, r, st)
 	}
-}
-
-type GHandler struct {
-	st storage.URLStorage
 }
 
 // Post Handler
@@ -217,7 +213,7 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL, err := st.Put(bodyString, r.Context())
+	shortURL, err := st.Put(r.Context(), bodyString)
 	var status int
 	if err != nil {
 		var dupErr *database.DuplicateError
@@ -255,10 +251,6 @@ type JSONResp struct {
 
 func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
 	defer r.Body.Close()
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 	reader, err := middleware.MakeDecompReader(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -279,7 +271,7 @@ func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 		return
 	}
 	var resp = JSONResp{}
-	resp.Result, err = st.Put(req.URL, r.Context())
+	resp.Result, err = st.Put(r.Context(), req.URL)
 	var status int
 	if err != nil {
 		var dupErr *database.DuplicateError
@@ -314,10 +306,6 @@ func MakeJSONHandler(st storage.URLStorage) http.HandlerFunc {
 // Batch handler
 func BatchHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
 	defer r.Body.Close()
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 	reader, err := middleware.MakeDecompReader(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -338,7 +326,7 @@ func BatchHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	resp, err := st.PutMany(req, r.Context())
+	resp, err := st.PutMany(r.Context(), req)
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

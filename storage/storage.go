@@ -26,10 +26,10 @@ type OriginalBatch = []OriginalData
 type ShortenedBatch = []ShortData
 
 type URLStorage interface {
-	Put(string, context.Context) (string, error)
-	Get(string, context.Context) (string, error)
-	PutMany(OriginalBatch, context.Context) (ShortenedBatch, error)
-	GetMany(ShortenedBatch, context.Context) (OriginalBatch, error)
+	Put(context.Context, string) (string, error)
+	Get(context.Context, string) (string, error)
+	PutMany(context.Context, OriginalBatch) (ShortenedBatch, error)
+	GetMany(context.Context, ShortenedBatch) (OriginalBatch, error)
 }
 
 func MakeRandomString(n int) string {
