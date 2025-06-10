@@ -13,6 +13,7 @@ func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
 		return
 	}
 	url := strings.Split(r.URL.String(), "/")
+
 	if len(url) != 2 {
 		w.WriteHeader(http.StatusBadRequest)
 		return
