@@ -14,6 +14,7 @@
 # Binaries
 cmd/shortener/main
 cmd/shortener/shortener
+cmd/db_client/db_client
 
 # Dependency directories (remove the comment below to include it)
 vendor/
