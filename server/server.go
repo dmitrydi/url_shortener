@@ -15,6 +15,7 @@ import (
 	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -79,7 +80,7 @@ func (stor *BasicStorage) Restore() error {
 
 }
 
-func (stor *BasicStorage) Put(_ context.Context, initURL string) (string, error) {
+func (stor *BasicStorage) Put(_ context.Context, initURL string, uid uuid.UUID) (string, error) {
 	var randURL string
 	for {
 		randURL = helpers.MakeRandomString(storage.ShortURLLen)
@@ -121,10 +122,10 @@ func (stor *BasicStorage) GetMany(c context.Context, req storage.ShortenedBatch)
 	return result, nil
 }
 
-func (stor *BasicStorage) PutMany(c context.Context, req storage.OriginalBatch) (storage.ShortenedBatch, error) {
+func (stor *BasicStorage) PutMany(c context.Context, req storage.OriginalBatch, uid uuid.UUID) (storage.ShortenedBatch, error) {
 	result := make(storage.ShortenedBatch, 0)
 	for _, r := range req {
-		shortURL, err := stor.Put(c, r.OriginalURL)
+		shortURL, err := stor.Put(c, r.OriginalURL, uid)
 		if err != nil {
 			return result, err
 		}

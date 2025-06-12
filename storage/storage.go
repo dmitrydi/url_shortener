@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"math/rand"
 	"os"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -26,9 +28,9 @@ type OriginalBatch = []OriginalData
 type ShortenedBatch = []ShortData
 
 type URLStorage interface {
-	Put(context.Context, string) (string, error)
+	Put(context.Context, string, uuid.UUID) (string, error)
 	Get(context.Context, string) (string, error)
-	PutMany(context.Context, OriginalBatch) (ShortenedBatch, error)
+	PutMany(context.Context, OriginalBatch, uuid.UUID) (ShortenedBatch, error)
 	GetMany(context.Context, ShortenedBatch) (OriginalBatch, error)
 }
 

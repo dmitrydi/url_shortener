@@ -6,12 +6,13 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/dmitrydi/url_shortener/authorization"
 	"github.com/dmitrydi/url_shortener/database"
 	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
 )
 
-func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
+func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, us authorization.IDStatus) {
 	defer r.Body.Close()
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusBadRequest)
@@ -34,7 +35,8 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL, err := st.Put(r.Context(), bodyString)
+
+	shortURL, err := st.Put(r.Context(), bodyString, us.UID)
 	var status int
 	if err != nil {
 		var dupErr *database.DuplicateError
@@ -56,6 +58,7 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 
 func MakePostHandler(st storage.URLStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		PostHandler(w, r, st)
+		us := authorization.GetUserIdStatus(r)
+		PostHandler(w, r, st, us)
 	}
 }

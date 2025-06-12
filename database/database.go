@@ -10,6 +10,7 @@ import (
 
 	"github.com/dmitrydi/url_shortener/internal/helpers"
 	"github.com/dmitrydi/url_shortener/storage"
+	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -27,7 +28,7 @@ func NewDBStorage(db *sql.DB, prefix string) (*DBStorage, error) {
 	res := DBStorage{db: db, rootPrefix: prefix}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS urls ("short_url" TEXT PRIMARY KEY, "init_url" TEXT UNIQUE NOT NULL)`)
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS urls ("short_url" TEXT PRIMARY KEY, "init_url" TEXT UNIQUE NOT NULL, "uid" UUID)`)
 	if err != nil {
 		return nil, err
 	}
@@ -46,9 +47,9 @@ func (e *DuplicateError) Error() string {
 	return e.ExistingKey
 }
 
-func (d *DBStorage) Put(ctx context.Context, initURL string) (string, error) {
+func (d *DBStorage) Put(ctx context.Context, initURL string, uid uuid.UUID) (string, error) {
 	randURL := helpers.MakeRandomString(storage.ShortURLLen)
-	_, err := d.db.ExecContext(ctx, `INSERT INTO urls VALUES ($1, $2)`, randURL, initURL)
+	_, err := d.db.ExecContext(ctx, `INSERT INTO urls VALUES ($1, $2, $3)`, randURL, initURL, uid)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -72,7 +73,7 @@ func (d *DBStorage) Put(ctx context.Context, initURL string) (string, error) {
 	return d.rootPrefix + randURL, nil
 }
 
-func (d *DBStorage) PutMany(ctx context.Context, req storage.OriginalBatch) (storage.ShortenedBatch, error) {
+func (d *DBStorage) PutMany(ctx context.Context, req storage.OriginalBatch, uid uuid.UUID) (storage.ShortenedBatch, error) {
 	if len(req) == 0 {
 		return nil, errors.New("empty batch")
 	}
