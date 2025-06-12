@@ -1,11 +1,12 @@
 package server
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
+	"os"
 	"sync"
 
 	"strings"
@@ -38,14 +39,11 @@ func NewBasicStorage(rootPrefix string, persistPath string) (*BasicStorage, erro
 	if err != nil {
 		return ret, err
 	}
-	if p != nil {
-		lastID, err := p.Restore(ret)
-		if err != nil {
-			return ret, err
-		}
-		ret.lastID = lastID
-	}
 	ret.persister = p
+	err = ret.Restore()
+	if err != nil {
+		return nil, err
+	}
 	return ret, nil
 }
 
@@ -56,7 +54,32 @@ func MakeBasicStorage(rootPrefix string) BasicStorage {
 	return ret
 }
 
-func (stor *BasicStorage) Put(initURL string) (string, error) {
+func (stor *BasicStorage) Restore() error {
+	file, err := os.OpenFile(stor.persister.Filename, os.O_RDONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	var lastID uint
+	scanner := bufio.NewScanner(file)
+	for {
+		if !scanner.Scan() {
+			return scanner.Err()
+		}
+		data := scanner.Bytes()
+		entry := storage.URLEntry{}
+		err := json.Unmarshal(data, &entry)
+		if err != nil {
+			return err
+		}
+		stor.AddData(entry.ShortURL, entry.InitURL)
+		if entry.ID > lastID {
+			stor.lastID = entry.ID
+		}
+	}
+
+}
+
+func (stor *BasicStorage) Put(_ context.Context, initURL string) (string, error) {
 	var randURL string
 	for {
 		randURL = helpers.MakeRandomString(storage.ShortURLLen)
@@ -78,12 +101,36 @@ func (stor *BasicStorage) Close() error {
 	return stor.persister.Close()
 }
 
-func (stor *BasicStorage) Get(shortURL string) (string, error) {
+func (stor *BasicStorage) Get(_ context.Context, shortURL string) (string, error) {
 	val, ok := stor.data[shortURL]
 	if !ok {
 		return "", errors.New("url not exists")
 	}
 	return val, nil
+}
+
+func (stor *BasicStorage) GetMany(c context.Context, req storage.ShortenedBatch) (storage.OriginalBatch, error) {
+	result := make(storage.OriginalBatch, 0)
+	for _, r := range req {
+		initURL, err := stor.Get(c, r.ShortURL)
+		if err != nil {
+			return result, err
+		}
+		result = append(result, storage.OriginalData{CorrelationID: r.CorrelationID, OriginalURL: initURL})
+	}
+	return result, nil
+}
+
+func (stor *BasicStorage) PutMany(c context.Context, req storage.OriginalBatch) (storage.ShortenedBatch, error) {
+	result := make(storage.ShortenedBatch, 0)
+	for _, r := range req {
+		shortURL, err := stor.Put(c, r.OriginalURL)
+		if err != nil {
+			return result, err
+		}
+		result = append(result, storage.ShortData{CorrelationID: r.CorrelationID, ShortURL: shortURL})
+	}
+	return result, nil
 }
 
 func (stor *BasicStorage) RemovePrefix(url string) string {
@@ -111,156 +158,21 @@ func (stor *BasicStorage) AddData(shortURL string, initURL string) error {
 	return nil
 }
 
-// Get Handler
-
-func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	url := strings.Split(r.URL.String(), "/")
-	if len(url) != 2 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	res, err := st.Get(url[1])
-	if err == nil {
-		w.Header().Set("Location", res)
-		w.WriteHeader(http.StatusTemporaryRedirect)
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
-	}
-}
-
-func MakeGetHandler(st storage.URLStorage) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		GetHandler(w, r, st)
-	}
-}
-
-type GHandler struct {
-	st storage.URLStorage
-}
-
-// Post Handler
-
-func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
-	defer r.Body.Close()
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	reader, err := middleware.MakeDecompReader(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer reader.Close()
-
-	body, err := io.ReadAll(reader)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	bodyString := string(body)
-	if len(bodyString) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	shortURL, err := st.Put(bodyString)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(shortURL)))
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(shortURL))
-}
-
-func MakePostHandler(st storage.URLStorage) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		PostHandler(w, r, st)
-	}
-}
-
-// JSON Handler
-
-type JSONReq struct {
-	URL string `json:"url"`
-}
-
-type JSONResp struct {
-	Result string `json:"result"`
-}
-
-func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
-	defer r.Body.Close()
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	reader, err := middleware.MakeDecompReader(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer reader.Close()
-
-	body, err := io.ReadAll(reader)
-
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	var req = JSONReq{}
-	err = json.Unmarshal(body, &req)
-	if err != nil || len(req.URL) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	var resp = JSONResp{}
-	resp.Result, err = st.Put(req.URL)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	respJSON, err := json.Marshal(resp)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respJSON)))
-	w.WriteHeader(http.StatusCreated)
-	w.Write(respJSON)
-}
-
-func MakeJSONHandler(st storage.URLStorage) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		JSONHandler(w, r, st)
-	}
-}
-
 // Builder
 
-func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc) chi.Router {
-	r := chi.NewRouter()
-	r.Get(`/{path}`, getHandler)
-	r.Post(`/api/shorten`, jsonHandler)
-	r.Post(`/`, postHandler)
-	return r
-}
-
-func MakeRouter2(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc, logger *zap.Logger, pl *sync.Pool) chi.Router {
+func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
+	jsonHandler http.HandlerFunc, pingHandler http.HandlerFunc, batchHandler http.HandlerFunc,
+	logger *zap.Logger, pl *sync.Pool) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.MakeLogHandler(logger))
+	r.Get(`/ping`, pingHandler)
 	r.Get(`/{path}`, getHandler)
 	r.Group(func(rt chi.Router) {
 		rt.Use(middleware.MakeCompressHandler(pl))
-		r.Post(`/api/shorten`, jsonHandler)
 		r.Post(`/`, postHandler)
+		r.Post(`/api/shorten`, jsonHandler)
+		r.Post(`/api/shorten/batch`, batchHandler)
 	})
 	return r
 }

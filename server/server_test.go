@@ -3,21 +3,36 @@ package server
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/dmitrydi/url_shortener/handlers"
+	"github.com/dmitrydi/url_shortener/internal/gl"
 	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+func MakeTestRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc, jsonHandler http.HandlerFunc) chi.Router {
+	r := chi.NewRouter()
+	r.Get(`/{path}`, getHandler)
+	r.Post(`/api/shorten`, jsonHandler)
+	r.Post(`/`, postHandler)
+	return r
+}
 
 func TestBasicStorage(t *testing.T) {
 	prefix := "prefix/"
@@ -25,13 +40,13 @@ func TestBasicStorage(t *testing.T) {
 	pfile := "./dummy.out"
 	stor, err := NewBasicStorage(prefix, pfile)
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer stor.Close()
-	shortURL, err := stor.Put(initURL)
+	shortURL, err := stor.Put(context.TODO(), initURL)
 	require.NoError(t, err, "storage error on Put()")
 	assert.Equal(t, len(strings.TrimPrefix(shortURL, prefix)), storage.ShortURLLen, "invalid short URL pattern")
-	restoredURL, err := stor.Get(stor.RemovePrefix(shortURL))
+	restoredURL, err := stor.Get(context.TODO(), stor.RemovePrefix(shortURL))
 	require.NoError(t, err, "storage error on Get()")
 	assert.Equal(t, restoredURL, initURL, "restored URL differs from initial one")
 }
@@ -41,7 +56,7 @@ func TestPostHandler(t *testing.T) {
 	pfile := "./dummy.out"
 	storage, err := NewBasicStorage(prefix, pfile)
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer storage.Close()
 	type want struct {
@@ -87,7 +102,7 @@ func TestPostHandler(t *testing.T) {
 			request := httptest.NewRequest(test.method, "/", bytes.NewBuffer([]byte(test.initURL)))
 			// создаём новый Recorder
 			w := httptest.NewRecorder()
-			PostHandler(w, request, storage)
+			handlers.PostHandler(w, request, storage)
 
 			res := w.Result()
 			// проверяем код ответа
@@ -111,7 +126,7 @@ func TestGetHandler(t *testing.T) {
 	pfile := "./dummy.out"
 	stor, err := NewBasicStorage(prefix, pfile)
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer stor.Close()
 	randomPath := storage.MakeRandomString(8)
@@ -152,7 +167,7 @@ func TestGetHandler(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			putRequest := httptest.NewRequest(test.putMethod, "/", bytes.NewBuffer([]byte(test.initURL)))
 			w := httptest.NewRecorder()
-			PostHandler(w, putRequest, stor)
+			handlers.PostHandler(w, putRequest, stor)
 			putRes := w.Result()
 			assert.Equal(t, test.want.putCode, putRes.StatusCode, "invalid status code")
 			if putRes.StatusCode == http.StatusCreated {
@@ -165,7 +180,7 @@ func TestGetHandler(t *testing.T) {
 				// делаем get-запрос к серверу
 				getRequest := httptest.NewRequest(test.getMethod, shortPath, nil)
 				r := httptest.NewRecorder()
-				GetHandler(r, getRequest, stor)
+				handlers.GetHandler(r, getRequest, stor)
 				getRes := r.Result()
 				defer getRes.Body.Close()
 				// проверки
@@ -178,7 +193,7 @@ func TestGetHandler(t *testing.T) {
 				// делаем get-запрос к серверу
 				getRequest := httptest.NewRequest(test.getMethod, shortPath, nil)
 				r := httptest.NewRecorder()
-				GetHandler(r, getRequest, stor)
+				handlers.GetHandler(r, getRequest, stor)
 				getRes := r.Result()
 				defer getRes.Body.Close()
 				// проверки
@@ -197,11 +212,11 @@ func TestJSONHandler(t *testing.T) {
 	pfile := "./dummy.out"
 	storage, err := NewBasicStorage(prefix, pfile)
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer storage.Close()
 	w := httptest.NewRecorder()
-	JSONHandler(w, req, storage)
+	handlers.JSONHandler(w, req, storage)
 	resp := w.Result()
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"), "invalid content type")
 	require.Equal(t, resp.StatusCode, http.StatusCreated, "bad response status")
@@ -209,7 +224,7 @@ func TestJSONHandler(t *testing.T) {
 
 	resBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	jresp := JSONResp{}
+	jresp := handlers.JSONResp{}
 
 	err = json.Unmarshal(resBody, &jresp)
 	require.NoError(t, err)
@@ -224,11 +239,11 @@ func TestJSONHandlerBad(t *testing.T) {
 	pfile := "./dummy.out"
 	storage, err := NewBasicStorage(prefix, pfile)
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer storage.Close()
 	w := httptest.NewRecorder()
-	JSONHandler(w, req, storage)
+	handlers.JSONHandler(w, req, storage)
 	resp := w.Result()
 	defer resp.Body.Close()
 	require.Equal(t, resp.StatusCode, http.StatusBadRequest, "unexpected status")
@@ -258,14 +273,14 @@ func testRequest(t *testing.T, ts *httptest.Server, method,
 }
 
 func makeJSONRequest(method string, path string, initURL string) *http.Request {
-	jreq := JSONReq{initURL}
+	jreq := handlers.JSONReq{URL: initURL}
 	bt, err := json.Marshal(jreq)
 	if err != nil {
-		log.Fatal("makeJSONRequest: json.Marshal")
+		gl.Log.Fatal("makeJSONRequest: json.Marshal")
 	}
 	req, err := http.NewRequest(method, path, bytes.NewBuffer(bt))
 	if err != nil {
-		log.Fatal("http.NewRequest ", err)
+		gl.Log.Fatal("http.NewRequest ", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	return req
@@ -275,11 +290,11 @@ func makeBadJSONRequest(method string, path string, initURL string) *http.Reques
 	jreq := BadJSONRequest{initURL}
 	bt, err := json.Marshal(jreq)
 	if err != nil {
-		log.Fatal("makeJSONRequest: json.Marshal")
+		gl.Log.Fatal("makeJSONRequest: json.Marshal")
 	}
 	req, err := http.NewRequest(method, path, bytes.NewBuffer(bt))
 	if err != nil {
-		log.Fatal("http.NewRequest ", err)
+		gl.Log.Fatal("http.NewRequest ", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	return req
@@ -290,10 +305,11 @@ func TestRouter(t *testing.T) {
 	initURL := "www.ya.ru"
 	tstorage, err := NewBasicStorage(hostPrefix, "./dummy.out")
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer tstorage.Close()
-	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
+	tserver := httptest.NewServer(MakeTestRouter(handlers.MakeGetHandler(tstorage),
+		handlers.MakePostHandler(tstorage), handlers.MakeJSONHandler(tstorage)))
 	defer tserver.Close()
 	postResp, postBody := testRequest(t, tserver, http.MethodPost, "/", initURL)
 	defer postResp.Body.Close()
@@ -311,10 +327,11 @@ func TestRouterJSONApi(t *testing.T) {
 	initURL := "www.ya.ru"
 	tstorage, err := NewBasicStorage(hostPrefix, "./dummy.out")
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer tstorage.Close()
-	tserver := httptest.NewServer(MakeRouter(MakeGetHandler(tstorage), MakePostHandler(tstorage), MakeJSONHandler(tstorage)))
+	tserver := httptest.NewServer(MakeTestRouter(handlers.MakeGetHandler(tstorage),
+		handlers.MakePostHandler(tstorage), handlers.MakeJSONHandler(tstorage)))
 	defer tserver.Close()
 	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
 	resp, err := tserver.Client().Do(req)
@@ -326,7 +343,7 @@ func TestRouterJSONApi(t *testing.T) {
 	var buf bytes.Buffer
 	_, err = buf.ReadFrom(resp.Body)
 	require.NoError(t, err, "io.ReadAll error")
-	r := JSONResp{}
+	r := handlers.JSONResp{}
 	err = json.Unmarshal(buf.Bytes(), &r)
 	require.NoError(t, err, "json.Unmarshal")
 	assert.Equal(t, len(hostPrefix)+tstorage.GetURLSize(), len(r.Result), "invalid body size")
@@ -337,7 +354,7 @@ func TestRouterCompress(t *testing.T) {
 	initURL := "www.ya.ru"
 	tstorage, err := NewBasicStorage(hostPrefix, "./dummy.out")
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer tstorage.Close()
 	writerPool := &sync.Pool{
@@ -346,10 +363,10 @@ func TestRouterCompress(t *testing.T) {
 			return writer
 		},
 	}
-	getHandler := middleware.CompressHandler(MakeGetHandler(tstorage), writerPool)
-	postHandler := middleware.CompressHandler(MakePostHandler(tstorage), writerPool)
-	jsonHandler := middleware.CompressHandler(MakeJSONHandler(tstorage), writerPool)
-	tserver := httptest.NewServer(MakeRouter(getHandler, postHandler, jsonHandler))
+	getHandler := middleware.CompressHandler(handlers.MakeGetHandler(tstorage), writerPool)
+	postHandler := middleware.CompressHandler(handlers.MakePostHandler(tstorage), writerPool)
+	jsonHandler := middleware.CompressHandler(handlers.MakeJSONHandler(tstorage), writerPool)
+	tserver := httptest.NewServer(MakeTestRouter(getHandler, postHandler, jsonHandler))
 	defer tserver.Close()
 	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
 	resp, err := tserver.Client().Do(req)
@@ -360,7 +377,7 @@ func TestRouterCompress(t *testing.T) {
 	var buf bytes.Buffer
 	_, err = buf.ReadFrom(resp.Body)
 	require.NoError(t, err, "io.ReadAll error")
-	r := JSONResp{}
+	r := handlers.JSONResp{}
 	err = json.Unmarshal(buf.Bytes(), &r)
 	require.NoError(t, err, "json.Unmarshal")
 	assert.Equal(t, len(hostPrefix)+tstorage.GetURLSize(), len(r.Result), "invalid body size")
@@ -371,7 +388,7 @@ func TestRouterCompress2(t *testing.T) {
 	initURL := "www.ya.ru"
 	tstorage, err := NewBasicStorage(hostPrefix, "./dummy.out")
 	if err != nil {
-		log.Fatal("could not initialize storage ", err.Error())
+		gl.Log.Fatal("could not initialize storage ", err.Error())
 	}
 	defer tstorage.Close()
 	writerPool := &sync.Pool{
@@ -382,14 +399,24 @@ func TestRouterCompress2(t *testing.T) {
 	}
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		log.Fatal(err)
+		gl.Log.Fatal(err)
 	}
 	defer logger.Sync()
 
-	getHandler := MakeGetHandler(tstorage)
-	postHandler := MakePostHandler(tstorage)
-	jsonHandler := MakeJSONHandler(tstorage)
-	tserver := httptest.NewServer(MakeRouter2(getHandler, postHandler, jsonHandler, logger, writerPool))
+	getHandler := handlers.MakeGetHandler(tstorage)
+	postHandler := handlers.MakePostHandler(tstorage)
+	jsonHandler := handlers.MakeJSONHandler(tstorage)
+	ps := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
+		`localhost`, `user2`, `07512851SqlPass`, `videos`)
+
+	db, err := sql.Open("pgx", ps)
+	if err != nil {
+		gl.Log.Fatal(err)
+	}
+	defer db.Close()
+	pingHandler := handlers.MakePingHandler(db)
+	batchHandler := handlers.MakeBatchHandler(tstorage)
+	tserver := httptest.NewServer(MakeRouter(getHandler, postHandler, jsonHandler, pingHandler, batchHandler, logger, writerPool))
 	defer tserver.Close()
 	req := makeJSONRequest(http.MethodPost, tserver.URL+"/api/shorten", initURL)
 	resp, err := tserver.Client().Do(req)
@@ -400,7 +427,7 @@ func TestRouterCompress2(t *testing.T) {
 	var buf bytes.Buffer
 	_, err = buf.ReadFrom(resp.Body)
 	require.NoError(t, err, "io.ReadAll error")
-	r := JSONResp{}
+	r := handlers.JSONResp{}
 	err = json.Unmarshal(buf.Bytes(), &r)
 	require.NoError(t, err, "json.Unmarshal")
 	assert.Equal(t, len(hostPrefix)+tstorage.GetURLSize(), len(r.Result), "invalid body size")
