@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -34,15 +35,18 @@ type UserAuth struct {
 func FromCookie(cookie *http.Cookie) UserAuth {
 	parts := strings.Split(cookie.Value, cookieDelimiter)
 	if len(parts) != 2 {
+		log.Println("invalid parts num")
 		return UserAuth{UID: uuid.Nil, Status: StatusInvalidCookie}
 	}
 	decodedValue, err := base64.URLEncoding.DecodeString(parts[0])
 	if err != nil {
+		log.Println("could not decode name")
 		return UserAuth{UID: uuid.Nil, Status: StatusInvalidCookie}
 	}
 
 	decodedSig, err := base64.URLEncoding.DecodeString(parts[1])
 	if err != nil {
+		log.Println("coud not decode key")
 		return UserAuth{UID: uuid.Nil, Status: StatusUnauthorized}
 	}
 
@@ -57,6 +61,7 @@ func FromCookie(cookie *http.Cookie) UserAuth {
 
 	id, err := uuid.Parse(parts[0])
 	if err != nil {
+		log.Println("coud not parse uid")
 		return UserAuth{UID: uuid.Nil, Status: StatusInvalidCookie}
 	}
 	return UserAuth{UID: id, Status: StatusOK}

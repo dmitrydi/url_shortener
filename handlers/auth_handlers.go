@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/dmitrydi/url_shortener/authorization"
@@ -45,6 +46,10 @@ func WithAuthHandlerWrapper(next WithAuthHandler, st storage.URLStorage) http.Ha
 	return func(w http.ResponseWriter, r *http.Request) {
 		ua, err := GetUserAuthorization(r, st)
 		var cookieError *CookieNotFound
+		log.Println("AuthStatus ", ua.Status)
+		if err != nil {
+			log.Println("Auth error ", err)
+		}
 		if errors.As(err, &cookieError) || ua.Status == authorization.StatusNotFound {
 			ua.UID = uuid.New()
 			cookieString, err := authorization.EncodeUID(ua.UID)
