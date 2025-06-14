@@ -7,20 +7,13 @@ import (
 	"net/http"
 
 	"github.com/dmitrydi/url_shortener/authorization"
-	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
 )
 
 func BatchHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, ua authorization.UserAuth) {
 	defer r.Body.Close()
-	reader, err := middleware.MakeDecompReader(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer reader.Close()
 
-	body, err := io.ReadAll(reader)
+	body, err := io.ReadAll(r.Body)
 
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -49,9 +42,3 @@ func BatchHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage,
 	w.WriteHeader(http.StatusCreated)
 	w.Write(respJSON)
 }
-
-// func MakeBatchHandler(st storage.URLStorage) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		BatchHandler(w, r, st)
-// 	}
-// }

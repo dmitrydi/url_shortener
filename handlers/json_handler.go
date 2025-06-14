@@ -9,7 +9,6 @@ import (
 
 	"github.com/dmitrydi/url_shortener/authorization"
 	"github.com/dmitrydi/url_shortener/database"
-	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
 )
 
@@ -23,14 +22,8 @@ type JSONResp struct {
 
 func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, ua authorization.UserAuth) {
 	defer r.Body.Close()
-	reader, err := middleware.MakeDecompReader(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer reader.Close()
 
-	body, err := io.ReadAll(reader)
+	body, err := io.ReadAll(r.Body)
 
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -68,9 +61,3 @@ func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, 
 	w.WriteHeader(status)
 	w.Write(respJSON)
 }
-
-// func MakeJSONHandler(st storage.URLStorage) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		JSONHandler(w, r, st)
-// 	}
-// }
