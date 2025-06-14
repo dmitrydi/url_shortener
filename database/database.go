@@ -125,7 +125,7 @@ func (d *DBStorage) GetByUID(ctx context.Context, uid uuid.UUID) ([]storage.URLP
 	result := make([]storage.URLPair, 0)
 	for rows.Next() {
 		var p storage.URLPair
-		err = rows.Scan(&p.ShortURL, &p.OriginalURL)
+		err = rows.Scan(&p)
 		if err != nil {
 			return nil, err
 		}
