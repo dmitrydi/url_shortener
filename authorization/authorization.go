@@ -59,7 +59,7 @@ func FromCookie(cookie *http.Cookie) UserAuth {
 		return UserAuth{UID: uuid.Nil, Status: StatusUnauthorized}
 	}
 
-	id, err := uuid.Parse(parts[0])
+	id, err := uuid.Parse(string(decodedValue))
 	if err != nil {
 		log.Println("coud not parse uid")
 		return UserAuth{UID: uuid.Nil, Status: StatusInvalidCookie}
