@@ -15,6 +15,7 @@ import (
 	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -23,6 +24,7 @@ import (
 type BasicStorage struct {
 	rootPrefix string
 	data       map[string]string
+	idIndex    map[uuid.UUID][]storage.URLPair
 	lastID     uint
 	persister  *storage.Persister
 }
@@ -35,6 +37,7 @@ func NewBasicStorage(rootPrefix string, persistPath string) (*BasicStorage, erro
 	}
 	ret.rootPrefix = rootPrefix
 	ret.data = make(map[string]string)
+	ret.idIndex = make(map[uuid.UUID][]storage.URLPair)
 	p, err := storage.NewPersister(persistPath)
 	if err != nil {
 		return ret, err
@@ -71,7 +74,7 @@ func (stor *BasicStorage) Restore() error {
 		if err != nil {
 			return err
 		}
-		stor.AddData(entry.ShortURL, entry.InitURL)
+		stor.AddData(entry.ShortURL, entry.InitURL, entry.UserID)
 		if entry.ID > lastID {
 			stor.lastID = entry.ID
 		}
@@ -79,7 +82,7 @@ func (stor *BasicStorage) Restore() error {
 
 }
 
-func (stor *BasicStorage) Put(_ context.Context, initURL string) (string, error) {
+func (stor *BasicStorage) Put(_ context.Context, initURL string, uid uuid.UUID) (string, error) {
 	var randURL string
 	for {
 		randURL = helpers.MakeRandomString(storage.ShortURLLen)
@@ -89,9 +92,10 @@ func (stor *BasicStorage) Put(_ context.Context, initURL string) (string, error)
 		}
 	}
 	stor.data[randURL] = initURL
+	stor.idIndex[uid] = append(stor.idIndex[uid], storage.URLPair{ShortURL: randURL, OriginalURL: initURL})
 	stor.lastID += 1
 	if stor.persister != nil {
-		stor.persister.Add(stor.lastID, randURL, initURL)
+		stor.persister.Add(stor.lastID, randURL, initURL, uid)
 	}
 
 	return stor.rootPrefix + randURL, nil
@@ -121,16 +125,26 @@ func (stor *BasicStorage) GetMany(c context.Context, req storage.ShortenedBatch)
 	return result, nil
 }
 
-func (stor *BasicStorage) PutMany(c context.Context, req storage.OriginalBatch) (storage.ShortenedBatch, error) {
+func (stor *BasicStorage) PutMany(c context.Context, req storage.OriginalBatch, uid uuid.UUID) (storage.ShortenedBatch, error) {
 	result := make(storage.ShortenedBatch, 0)
 	for _, r := range req {
-		shortURL, err := stor.Put(c, r.OriginalURL)
+		shortURL, err := stor.Put(c, r.OriginalURL, uid)
 		if err != nil {
 			return result, err
 		}
 		result = append(result, storage.ShortData{CorrelationID: r.CorrelationID, ShortURL: shortURL})
 	}
 	return result, nil
+}
+
+func (stor *BasicStorage) Contains(ctx context.Context, id uuid.UUID) (bool, error) {
+	_, ok := stor.idIndex[id]
+	return ok, nil
+}
+
+func (stor *BasicStorage) GetByUID(ctx context.Context, uid uuid.UUID) ([]storage.URLPair, error) {
+	res := stor.idIndex[uid]
+	return res, nil
 }
 
 func (stor *BasicStorage) RemovePrefix(url string) string {
@@ -149,12 +163,13 @@ func (e *DuplicateKeyError) Error() string {
 	return e.ExistingKey
 }
 
-func (stor *BasicStorage) AddData(shortURL string, initURL string) error {
+func (stor *BasicStorage) AddData(shortURL string, initURL string, uid uuid.UUID) error {
 	_, ok := stor.data[shortURL]
 	if ok {
 		return &DuplicateKeyError{ExistingKey: shortURL}
 	}
 	stor.data[shortURL] = initURL
+	stor.idIndex[uid] = append(stor.idIndex[uid], storage.URLPair{ShortURL: shortURL, OriginalURL: initURL})
 	return nil
 }
 
@@ -162,6 +177,7 @@ func (stor *BasicStorage) AddData(shortURL string, initURL string) error {
 
 func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
 	jsonHandler http.HandlerFunc, pingHandler http.HandlerFunc, batchHandler http.HandlerFunc,
+	userHandler http.HandlerFunc,
 	logger *zap.Logger, pl *sync.Pool) chi.Router {
 	r := chi.NewRouter()
 
@@ -173,6 +189,7 @@ func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
 		r.Post(`/`, postHandler)
 		r.Post(`/api/shorten`, jsonHandler)
 		r.Post(`/api/shorten/batch`, batchHandler)
+		r.Get(`/api/user/urls`, userHandler)
 	})
 	return r
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"math/rand"
 	"os"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -22,14 +24,21 @@ type ShortData struct {
 	ShortURL      string `json:"short_url"`
 }
 
+type URLPair struct {
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
+}
+
 type OriginalBatch = []OriginalData
 type ShortenedBatch = []ShortData
 
 type URLStorage interface {
-	Put(context.Context, string) (string, error)
+	Put(context.Context, string, uuid.UUID) (string, error)
 	Get(context.Context, string) (string, error)
-	PutMany(context.Context, OriginalBatch) (ShortenedBatch, error)
+	PutMany(context.Context, OriginalBatch, uuid.UUID) (ShortenedBatch, error)
 	GetMany(context.Context, ShortenedBatch) (OriginalBatch, error)
+	Contains(context.Context, uuid.UUID) (bool, error)
+	GetByUID(context.Context, uuid.UUID) ([]URLPair, error)
 }
 
 func MakeRandomString(n int) string {
@@ -52,9 +61,10 @@ type Persister struct {
 }
 
 type URLEntry struct {
-	ID       uint   `json:"id"`
-	ShortURL string `json:"short_url"`
-	InitURL  string `json:"init_url"`
+	ID       uint      `json:"id"`
+	ShortURL string    `json:"short_url"`
+	InitURL  string    `json:"init_url"`
+	UserID   uuid.UUID `json:"user_id"`
 }
 
 func NewPersister(filename string) (*Persister, error) {
@@ -69,8 +79,8 @@ func (p *Persister) Close() error {
 	return p.Producer.file.Close()
 }
 
-func (p *Persister) Add(id uint, shortURL string, initURL string) error {
-	entry := URLEntry{id, shortURL, initURL}
+func (p *Persister) Add(id uint, shortURL string, initURL string, uid uuid.UUID) error {
+	entry := URLEntry{id, shortURL, initURL, uid}
 	data, err := json.Marshal(&entry)
 	if err != nil {
 		return err
