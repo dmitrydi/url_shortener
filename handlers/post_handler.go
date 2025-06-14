@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/dmitrydi/url_shortener/authorization"
@@ -25,7 +24,6 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, 
 		return
 	}
 	bodyString := string(body)
-	log.Println("PostHandler: body ", bodyString)
 	if len(bodyString) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		return
