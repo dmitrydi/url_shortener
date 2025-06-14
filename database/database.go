@@ -84,7 +84,7 @@ func (d *DBStorage) PutMany(ctx context.Context, req storage.OriginalBatch, uid 
 	}
 	for _, r := range req {
 		randURL := helpers.MakeRandomString(storage.ShortURLLen)
-		_, err = d.db.ExecContext(ctx, `INSERT INTO urls VALUES ($1, $2)`, randURL, r.OriginalURL)
+		_, err = d.db.ExecContext(ctx, `INSERT INTO urls VALUES ($1, $2, $3)`, randURL, r.OriginalURL, uid)
 		if err != nil {
 			tx.Rollback()
 			return result, err
@@ -104,6 +104,10 @@ func (d *DBStorage) Get(ctx context.Context, shortURL string) (string, error) {
 		return "", err
 	}
 	return initURL, nil
+}
+
+func (d *DBStorage) Contains(ctx context.Context, id uuid.UUID) (bool, error) {
+	panic("DBStorage::Contains not implemented")
 }
 
 func MakeGetList(req storage.ShortenedBatch) string {

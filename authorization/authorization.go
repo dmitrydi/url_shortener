@@ -1,7 +1,12 @@
 package authorization
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -9,48 +14,68 @@ import (
 type AuthStatus int
 
 const (
-	StatusAuthorized = 0
-	StatusNotFound   = 1
-	StatusBadKey     = 2
+	StatusOK            = 0
+	StatusInvalidCookie = 1
+	StatusUnauthorized  = 2
+	StatusNotFound      = 3
 )
 
-type IDStatus struct {
+const (
+	AuthCookieName  = "authorization"
+	secretKey       = "01234567890"
+	cookieDelimiter = "."
+)
+
+type UserAuth struct {
 	UID    uuid.UUID
 	Status AuthStatus
 }
 
-var secretKey = []byte("cookie-secret-key")
-var cookieName = "shortener-id"
-
-func UUIDFromCookie(c *http.Cookie) (uuid.UUID, error) {
-	return uuid.Parse(c.Value)
-}
-
-func GetUserIdStatus(r *http.Request) IDStatus {
-	return IDStatus{UID: uuid.New(), Status: StatusAuthorized}
-}
-
-func GetUserId(r *http.Request) uuid.UUID {
-	for _, c := range r.Cookies() {
-		if c.Name == cookieName {
-			id, err := UUIDFromCookie(c)
-			if err != nil {
-				return uuid.Nil
-			}
-			return id
-		}
+func FromCookie(cookie *http.Cookie) UserAuth {
+	parts := strings.Split(cookie.Value, cookieDelimiter)
+	if len(parts) != 2 {
+		return UserAuth{UID: uuid.Nil, Status: StatusInvalidCookie}
 	}
-	return uuid.Nil
+	decodedValue, err := base64.URLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return UserAuth{UID: uuid.Nil, Status: StatusInvalidCookie}
+	}
+
+	decodedSig, err := base64.URLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return UserAuth{UID: uuid.Nil, Status: StatusInvalidCookie}
+	}
+
+	// Проверяем подпись
+	mac := hmac.New(sha256.New, []byte(secretKey))
+	mac.Write(decodedValue)
+	expectedSig := mac.Sum(nil)
+
+	if !hmac.Equal(decodedSig, expectedSig) {
+		return UserAuth{UID: uuid.Nil, Status: StatusUnauthorized}
+	}
+
+	id, err := uuid.Parse(parts[0])
+	if err != nil {
+		return UserAuth{UID: uuid.Nil, Status: StatusInvalidCookie}
+	}
+	return UserAuth{UID: id, Status: StatusOK}
 }
 
-func CreateUserId() uuid.UUID {
-	return uuid.New()
-}
+func EncodeUID(uid uuid.UUID) (string, error) {
+	sUid := uid.String()
+	if len(sUid) == 0 {
+		return "", errors.New("error encoding uid")
+	}
+	// Создаем подпись
+	mac := hmac.New(sha256.New, []byte(secretKey))
+	mac.Write([]byte(sUid))
+	signature := mac.Sum(nil)
 
-func SetCookie(w http.ResponseWriter, cookie *http.Cookie) {
-	http.SetCookie(w, cookie)
-}
+	// Кодируем значение и подпись в base64 для cookie
+	encodedValue := base64.URLEncoding.EncodeToString([]byte(sUid))
+	encodedSig := base64.URLEncoding.EncodeToString(signature)
 
-func SetID(cookie *http.Cookie, uid uuid.UUID) {
-
+	cookieString := encodedValue + cookieDelimiter + encodedSig
+	return cookieString, nil
 }

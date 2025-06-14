@@ -134,6 +134,10 @@ func (stor *BasicStorage) PutMany(c context.Context, req storage.OriginalBatch, 
 	return result, nil
 }
 
+func (d *BasicStorage) Contains(ctx context.Context, id uuid.UUID) (bool, error) {
+	panic("BasicStorage::Contains not implemented")
+}
+
 func (stor *BasicStorage) RemovePrefix(url string) string {
 	return strings.TrimPrefix(url, stor.rootPrefix)
 }

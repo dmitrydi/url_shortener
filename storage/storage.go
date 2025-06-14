@@ -32,6 +32,7 @@ type URLStorage interface {
 	Get(context.Context, string) (string, error)
 	PutMany(context.Context, OriginalBatch, uuid.UUID) (ShortenedBatch, error)
 	GetMany(context.Context, ShortenedBatch) (OriginalBatch, error)
+	Contains(context.Context, uuid.UUID) (bool, error)
 }
 
 func MakeRandomString(n int) string {

@@ -46,10 +46,10 @@ func main() {
 			logger.Fatal(err.Error())
 		}
 		getHandler = handlers.MakeGetHandler(s)
-		postHandler = handlers.MakePostHandler(s)
-		jsonHandler = handlers.MakeJSONHandler(s)
+		postHandler = handlers.WithAuthHandlerWrapper(handlers.PostHandler, s)
+		jsonHandler = handlers.WithAuthHandlerWrapper(handlers.JSONHandler, s)
 		pingHandler = handlers.MakePingHandler(db)
-		batchHandler = handlers.MakeBatchHandler(s)
+		batchHandler = handlers.WithAuthHandlerWrapper(handlers.BatchHandler, s)
 	} else {
 
 		s, err := server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
@@ -57,10 +57,10 @@ func main() {
 			logger.Fatal(err.Error())
 		}
 		getHandler = handlers.MakeGetHandler(s)
-		postHandler = handlers.MakePostHandler(s)
-		jsonHandler = handlers.MakeJSONHandler(s)
+		postHandler = handlers.WithAuthHandlerWrapper(handlers.PostHandler, s)
+		jsonHandler = handlers.WithAuthHandlerWrapper(handlers.JSONHandler, s)
 		pingHandler = handlers.MakePingHandler(nil)
-		batchHandler = handlers.MakeBatchHandler(s)
+		batchHandler = handlers.WithAuthHandlerWrapper(handlers.BatchHandler, s)
 		defer s.Close()
 	}
 

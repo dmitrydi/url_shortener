@@ -309,7 +309,7 @@ func TestRouter(t *testing.T) {
 	}
 	defer tstorage.Close()
 	tserver := httptest.NewServer(MakeTestRouter(handlers.MakeGetHandler(tstorage),
-		handlers.MakePostHandler(tstorage), handlers.MakeJSONHandler(tstorage)))
+		handlers.WithAuthHandlerWrapper(handlers.PostHandler, tstorage), handlers.MakeJSONHandler(tstorage)))
 	defer tserver.Close()
 	postResp, postBody := testRequest(t, tserver, http.MethodPost, "/", initURL)
 	defer postResp.Body.Close()

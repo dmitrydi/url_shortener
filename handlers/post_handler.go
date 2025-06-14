@@ -12,7 +12,7 @@ import (
 	"github.com/dmitrydi/url_shortener/storage"
 )
 
-func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, us authorization.IDStatus) {
+func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, ua authorization.UserAuth) {
 	defer r.Body.Close()
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusBadRequest)
@@ -36,7 +36,7 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, 
 		return
 	}
 
-	shortURL, err := st.Put(r.Context(), bodyString, us.UID)
+	shortURL, err := st.Put(r.Context(), bodyString, ua.UID)
 	var status int
 	if err != nil {
 		var dupErr *database.DuplicateError
@@ -56,9 +56,9 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, 
 	w.Write([]byte(shortURL))
 }
 
-func MakePostHandler(st storage.URLStorage) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		us := authorization.GetUserIdStatus(r)
-		PostHandler(w, r, st, us)
-	}
-}
+// func MakePostHandler(st storage.URLStorage) http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		us := authorization.GetUserIdStatus(r)
+// 		PostHandler(w, r, st, us)
+// 	}
+// }
