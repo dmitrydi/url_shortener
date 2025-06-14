@@ -17,6 +17,7 @@ func GetByUserHandler(w http.ResponseWriter, r *http.Request, st storage.URLStor
 	}
 	data, err := st.GetByUID(r.Context(), ua.UID)
 	if err != nil {
+		log.Println("GetByUserHandler ", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
