@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/dmitrydi/url_shortener/authorization"
@@ -35,6 +36,7 @@ func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	log.Println("JSONHandler: req ", req)
 	var resp = JSONResp{}
 	resp.Result, err = st.Put(r.Context(), req.URL, ua.UID)
 	var status int
