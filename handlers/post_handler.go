@@ -55,10 +55,3 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, 
 	w.WriteHeader(status)
 	w.Write([]byte(shortURL))
 }
-
-// func MakePostHandler(st storage.URLStorage) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		us := authorization.GetUserIdStatus(r)
-// 		PostHandler(w, r, st, us)
-// 	}
-// }

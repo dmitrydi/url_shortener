@@ -12,6 +12,7 @@ import (
 	"github.com/dmitrydi/url_shortener/handlers"
 	"github.com/dmitrydi/url_shortener/internal/gl"
 	"github.com/dmitrydi/url_shortener/server"
+	"github.com/dmitrydi/url_shortener/storage"
 	"go.uber.org/zap"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -26,46 +27,38 @@ func main() {
 	defer logger.Sync()
 
 	var (
-		getHandler   http.HandlerFunc
-		postHandler  http.HandlerFunc
-		jsonHandler  http.HandlerFunc
-		pingHandler  http.HandlerFunc
-		batchHandler http.HandlerFunc
-		userHandler  http.HandlerFunc
+		db *sql.DB
+		s  storage.URLStorage
 	)
 
 	flag.Parse()
 
 	if len(*config.DBPrompt) > 0 {
-		db, err := sql.Open("pgx", *config.DBPrompt)
+		db, err = sql.Open("pgx", *config.DBPrompt)
 		if err != nil {
 			logger.Fatal(err.Error())
 		}
 		defer db.Close()
-		s, err := database.NewDBStorage(db, *config.URLPrefix)
+		s, err = database.NewDBStorage(db, *config.URLPrefix)
 		if err != nil {
 			logger.Fatal(err.Error())
 		}
-		getHandler = handlers.WithAuthHandlerWrapper(handlers.GetHandler, s)
-		postHandler = handlers.WithAuthHandlerWrapper(handlers.PostHandler, s)
-		jsonHandler = handlers.WithAuthHandlerWrapper(handlers.JSONHandler, s)
-		pingHandler = handlers.MakePingHandler(db)
-		batchHandler = handlers.WithAuthHandlerWrapper(handlers.BatchHandler, s)
-		userHandler = handlers.WithAuthHandlerWrapper(handlers.GetByUserHandler, s)
 	} else {
 
-		s, err := server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
+		bs, err := server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
 		if err != nil {
 			logger.Fatal(err.Error())
 		}
-		getHandler = handlers.WithAuthHandlerWrapper(handlers.GetHandler, s)
-		postHandler = handlers.WithAuthHandlerWrapper(handlers.PostHandler, s)
-		jsonHandler = handlers.WithAuthHandlerWrapper(handlers.JSONHandler, s)
-		pingHandler = handlers.MakePingHandler(nil)
-		batchHandler = handlers.WithAuthHandlerWrapper(handlers.BatchHandler, s)
-		userHandler = handlers.WithAuthHandlerWrapper(handlers.GetByUserHandler, s)
-		defer s.Close()
+		defer bs.Close()
+		s = bs
 	}
+
+	getHandler := handlers.WithAuthHandlerWrapper(handlers.GetHandler, s)
+	postHandler := handlers.WithAuthHandlerWrapper(handlers.PostHandler, s)
+	jsonHandler := handlers.WithAuthHandlerWrapper(handlers.JSONHandler, s)
+	pingHandler := handlers.MakePingHandler(db)
+	batchHandler := handlers.WithAuthHandlerWrapper(handlers.BatchHandler, s)
+	userHandler := handlers.WithAuthHandlerWrapper(handlers.GetByUserHandler, s)
 
 	writerPool := &sync.Pool{
 		New: func() any {
