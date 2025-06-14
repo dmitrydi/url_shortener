@@ -8,6 +8,7 @@ import (
 
 	"github.com/dmitrydi/url_shortener/authorization"
 	"github.com/dmitrydi/url_shortener/database"
+	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
 )
 
@@ -17,8 +18,14 @@ func PostHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	reader, err := middleware.MakeDecompReader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
