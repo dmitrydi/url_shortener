@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -28,19 +30,30 @@ func main() {
 		log.Fatal("could not ping db")
 	}
 
-	_, err = db.ExecContext(context.Background(), "INSERT INTO urls2 VALUES('a1', 'b1')")
+	args := os.Args[1:]
+	if len(args) != 2 {
+		log.Fatal("provide two arguments")
+	}
+
+	newUid := uuid.New()
+
+	_, err = db.ExecContext(context.Background(), "INSERT INTO urls_id VALUES($1, $2, $3)", args[0], args[1], newUid)
 	var pgErr *pgconn.PgError
 	if err != nil {
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == pgerrcode.UniqueViolation {
 				log.Println("Unique violation")
 			} else {
-				log.Println("Error code ", pgErr.Code)
+				log.Println("Error code ", pgErr)
 			}
 		} else {
 			log.Println("Error is not pqErr, ", err)
 		}
-	} else {
-		log.Println("err is nil")
 	}
+	var contains bool
+	err = db.QueryRowContext(context.Background(), `SELECT EXISTS(SELECT 1 FROM urls_id WHERE uid = $1)`, newUid).Scan(&contains)
+	if err != nil {
+		log.Fatal("Get error, ", err)
+	}
+	log.Println(newUid, " exists ", contains)
 }

@@ -55,9 +55,10 @@ type Persister struct {
 }
 
 type URLEntry struct {
-	ID       uint   `json:"id"`
-	ShortURL string `json:"short_url"`
-	InitURL  string `json:"init_url"`
+	ID       uint      `json:"id"`
+	ShortURL string    `json:"short_url"`
+	InitURL  string    `json:"init_url"`
+	UserID   uuid.UUID `json:"user_id"`
 }
 
 func NewPersister(filename string) (*Persister, error) {
@@ -72,8 +73,8 @@ func (p *Persister) Close() error {
 	return p.Producer.file.Close()
 }
 
-func (p *Persister) Add(id uint, shortURL string, initURL string) error {
-	entry := URLEntry{id, shortURL, initURL}
+func (p *Persister) Add(id uint, shortURL string, initURL string, uid uuid.UUID) error {
+	entry := URLEntry{id, shortURL, initURL, uid}
 	data, err := json.Marshal(&entry)
 	if err != nil {
 		return err

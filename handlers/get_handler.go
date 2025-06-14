@@ -4,10 +4,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/dmitrydi/url_shortener/authorization"
 	"github.com/dmitrydi/url_shortener/storage"
 )
 
-func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
+func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, _ authorization.UserAuth) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -27,8 +28,8 @@ func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
 	}
 }
 
-func MakeGetHandler(st storage.URLStorage) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		GetHandler(w, r, st)
-	}
-}
+// func MakeGetHandler(st storage.URLStorage) http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		GetHandler(w, r, st)
+// 	}
+// }

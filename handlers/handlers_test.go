@@ -65,7 +65,7 @@ func TestGetHandler(t *testing.T) {
 			}
 
 			r := httptest.NewRecorder()
-			GetHandler(r, getRequest, m)
+			GetHandler(r, getRequest, m, authorization.UserAuth{})
 			getRes := r.Result()
 			defer getRes.Body.Close()
 			assert.Equal(t, test.want.getCode, getRes.StatusCode, "invalid response code")

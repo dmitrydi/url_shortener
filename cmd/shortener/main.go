@@ -45,7 +45,7 @@ func main() {
 		if err != nil {
 			logger.Fatal(err.Error())
 		}
-		getHandler = handlers.MakeGetHandler(s)
+		getHandler = handlers.WithAuthHandlerWrapper(handlers.GetHandler, s)
 		postHandler = handlers.WithAuthHandlerWrapper(handlers.PostHandler, s)
 		jsonHandler = handlers.WithAuthHandlerWrapper(handlers.JSONHandler, s)
 		pingHandler = handlers.MakePingHandler(db)
@@ -56,7 +56,7 @@ func main() {
 		if err != nil {
 			logger.Fatal(err.Error())
 		}
-		getHandler = handlers.MakeGetHandler(s)
+		getHandler = handlers.WithAuthHandlerWrapper(handlers.GetHandler, s)
 		postHandler = handlers.WithAuthHandlerWrapper(handlers.PostHandler, s)
 		jsonHandler = handlers.WithAuthHandlerWrapper(handlers.JSONHandler, s)
 		pingHandler = handlers.MakePingHandler(nil)

@@ -21,9 +21,15 @@ import (
 
 // Storage
 
+type URLPair struct {
+	ShortURL    string
+	OriginalURL string
+}
+
 type BasicStorage struct {
 	rootPrefix string
 	data       map[string]string
+	idIndex    map[uuid.UUID][]URLPair
 	lastID     uint
 	persister  *storage.Persister
 }
@@ -36,6 +42,7 @@ func NewBasicStorage(rootPrefix string, persistPath string) (*BasicStorage, erro
 	}
 	ret.rootPrefix = rootPrefix
 	ret.data = make(map[string]string)
+	ret.idIndex = make(map[uuid.UUID][]URLPair)
 	p, err := storage.NewPersister(persistPath)
 	if err != nil {
 		return ret, err
@@ -72,7 +79,7 @@ func (stor *BasicStorage) Restore() error {
 		if err != nil {
 			return err
 		}
-		stor.AddData(entry.ShortURL, entry.InitURL)
+		stor.AddData(entry.ShortURL, entry.InitURL, entry.UserID)
 		if entry.ID > lastID {
 			stor.lastID = entry.ID
 		}
@@ -90,9 +97,10 @@ func (stor *BasicStorage) Put(_ context.Context, initURL string, uid uuid.UUID) 
 		}
 	}
 	stor.data[randURL] = initURL
+	stor.idIndex[uid] = append(stor.idIndex[uid], URLPair{ShortURL: randURL, OriginalURL: initURL})
 	stor.lastID += 1
 	if stor.persister != nil {
-		stor.persister.Add(stor.lastID, randURL, initURL)
+		stor.persister.Add(stor.lastID, randURL, initURL, uid)
 	}
 
 	return stor.rootPrefix + randURL, nil
@@ -134,8 +142,9 @@ func (stor *BasicStorage) PutMany(c context.Context, req storage.OriginalBatch, 
 	return result, nil
 }
 
-func (d *BasicStorage) Contains(ctx context.Context, id uuid.UUID) (bool, error) {
-	panic("BasicStorage::Contains not implemented")
+func (stor *BasicStorage) Contains(ctx context.Context, id uuid.UUID) (bool, error) {
+	_, ok := stor.idIndex[id]
+	return ok, nil
 }
 
 func (stor *BasicStorage) RemovePrefix(url string) string {
@@ -154,12 +163,13 @@ func (e *DuplicateKeyError) Error() string {
 	return e.ExistingKey
 }
 
-func (stor *BasicStorage) AddData(shortURL string, initURL string) error {
+func (stor *BasicStorage) AddData(shortURL string, initURL string, uid uuid.UUID) error {
 	_, ok := stor.data[shortURL]
 	if ok {
 		return &DuplicateKeyError{ExistingKey: shortURL}
 	}
 	stor.data[shortURL] = initURL
+	stor.idIndex[uid] = append(stor.idIndex[uid], URLPair{ShortURL: shortURL, OriginalURL: initURL})
 	return nil
 }
 

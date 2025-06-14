@@ -107,7 +107,13 @@ func (d *DBStorage) Get(ctx context.Context, shortURL string) (string, error) {
 }
 
 func (d *DBStorage) Contains(ctx context.Context, id uuid.UUID) (bool, error) {
-	panic("DBStorage::Contains not implemented")
+	var contains bool
+	err := d.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM urls WHERE uid = $1)`, id).Scan(&contains)
+	if err != nil {
+		fmt.Println("Get error, ", err)
+		return false, err
+	}
+	return contains, nil
 }
 
 func MakeGetList(req storage.ShortenedBatch) string {

@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/dmitrydi/url_shortener/authorization"
 	"github.com/dmitrydi/url_shortener/storage"
+	"github.com/google/uuid"
 )
 
 type CookieNotFound struct {
@@ -42,8 +44,16 @@ type WithAuthHandler func(http.ResponseWriter, *http.Request, storage.URLStorage
 func WithAuthHandlerWrapper(next WithAuthHandler, st storage.URLStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ua, err := GetUserAuthorization(r, st)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+		var cookieError *CookieNotFound
+		if errors.As(err, &cookieError) || ua.Status == authorization.StatusNotFound {
+			ua.UID = uuid.New()
+			cookieString, err := authorization.EncodeUID(ua.UID)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			cookie := &http.Cookie{Name: authorization.AuthCookieName, Value: cookieString}
+			http.SetCookie(w, cookie)
 		}
 		next(w, r, st, ua)
 	}

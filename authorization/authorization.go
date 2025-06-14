@@ -43,7 +43,7 @@ func FromCookie(cookie *http.Cookie) UserAuth {
 
 	decodedSig, err := base64.URLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return UserAuth{UID: uuid.Nil, Status: StatusInvalidCookie}
+		return UserAuth{UID: uuid.Nil, Status: StatusUnauthorized}
 	}
 
 	// Проверяем подпись
