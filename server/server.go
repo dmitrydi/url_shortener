@@ -185,7 +185,7 @@ func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
 	r.Get(`/ping`, pingHandler)
 	r.Get(`/{path}`, getHandler)
 	r.Group(func(rt chi.Router) {
-		rt.Use(middleware.MakeDecompressHandler(), middleware.MakeCompressHandler(pl))
+		rt.Use(middleware.MakeCompressHandler(pl))
 		r.Post(`/`, postHandler)
 		r.Post(`/api/shorten`, jsonHandler)
 		r.Post(`/api/shorten/batch`, batchHandler)
