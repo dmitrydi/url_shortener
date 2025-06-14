@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"io"
 	"net/http"
+	"strings"
 )
 
 type DecompReader struct {
@@ -84,9 +85,10 @@ func MakeDecompressHandler() func(http.Handler) http.Handler {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+			sBody := string(decompBody)
 			newReq := r.Clone(r.Context())
-			newReq.Body = io.NopCloser(bytes.NewReader(decompBody))
-			newReq.ContentLength = int64(len(decompBody))
+			newReq.Body = io.NopCloser(strings.NewReader(sBody))
+			newReq.ContentLength = int64(len(sBody))
 			newReq.Header.Del("Content-Encoding")
 			next.ServeHTTP(w, newReq)
 		}
