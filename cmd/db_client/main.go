@@ -8,11 +8,36 @@ import (
 	"log"
 	"os"
 
+	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+func GetByUID(d *sql.DB, ctx context.Context, uid uuid.UUID) ([]storage.URLPair, error) {
+	rows, err := d.QueryContext(ctx, `SELECT (short_url, init_url) FROM urls_id WHERE uid = $1`, uid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]storage.URLPair, 0)
+	for rows.Next() {
+		var p storage.URLPair
+		err = rows.Scan(&p.ShortURL, &p.OriginalURL)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, p)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
 
 func main() {
 	ps := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -50,10 +75,9 @@ func main() {
 			log.Println("Error is not pqErr, ", err)
 		}
 	}
-	var contains bool
-	err = db.QueryRowContext(context.Background(), `SELECT EXISTS(SELECT 1 FROM urls_id WHERE uid = $1)`, newUid).Scan(&contains)
+	val, err := GetByUID(db, context.Background(), newUid)
 	if err != nil {
-		log.Fatal("Get error, ", err)
+		log.Fatal(err)
 	}
-	log.Println(newUid, " exists ", contains)
+	log.Println(val)
 }

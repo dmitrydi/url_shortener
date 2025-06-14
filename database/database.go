@@ -117,7 +117,7 @@ func (d *DBStorage) Contains(ctx context.Context, id uuid.UUID) (bool, error) {
 }
 
 func (d *DBStorage) GetByUID(ctx context.Context, uid uuid.UUID) ([]storage.URLPair, error) {
-	rows, err := d.db.QueryContext(ctx, `SELECT (short_url, init_url) FROM urls WHERE uid = $1`, uid)
+	rows, err := d.db.QueryContext(ctx, `SELECT short_url, init_url FROM urls WHERE uid = $1`, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (d *DBStorage) GetByUID(ctx context.Context, uid uuid.UUID) ([]storage.URLP
 	result := make([]storage.URLPair, 0)
 	for rows.Next() {
 		var p storage.URLPair
-		err = rows.Scan(&p)
+		err = rows.Scan(&p.ShortURL, &p.OriginalURL)
 		if err != nil {
 			return nil, err
 		}
