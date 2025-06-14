@@ -68,17 +68,17 @@ func FromCookie(cookie *http.Cookie) UserAuth {
 }
 
 func EncodeUID(uid uuid.UUID) (string, error) {
-	sUid := uid.String()
-	if len(sUid) == 0 {
+	sUID := uid.String()
+	if len(sUID) == 0 {
 		return "", errors.New("error encoding uid")
 	}
 	// Создаем подпись
 	mac := hmac.New(sha256.New, []byte(secretKey))
-	mac.Write([]byte(sUid))
+	mac.Write([]byte(sUID))
 	signature := mac.Sum(nil)
 
 	// Кодируем значение и подпись в base64 для cookie
-	encodedValue := base64.URLEncoding.EncodeToString([]byte(sUid))
+	encodedValue := base64.URLEncoding.EncodeToString([]byte(sUID))
 	encodedSig := base64.URLEncoding.EncodeToString(signature)
 
 	cookieString := encodedValue + cookieDelimiter + encodedSig

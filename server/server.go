@@ -143,7 +143,7 @@ func (stor *BasicStorage) Contains(ctx context.Context, id uuid.UUID) (bool, err
 }
 
 func (stor *BasicStorage) GetByUID(ctx context.Context, uid uuid.UUID) ([]storage.URLPair, error) {
-	res, _ := stor.idIndex[uid]
+	res := stor.idIndex[uid]
 	return res, nil
 }
 

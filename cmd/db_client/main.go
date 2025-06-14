@@ -60,9 +60,9 @@ func main() {
 		log.Fatal("provide two arguments")
 	}
 
-	newUid := uuid.New()
+	newUID := uuid.New()
 
-	_, err = db.ExecContext(context.Background(), "INSERT INTO urls_id VALUES($1, $2, $3)", args[0], args[1], newUid)
+	_, err = db.ExecContext(context.Background(), "INSERT INTO urls_id VALUES($1, $2, $3)", args[0], args[1], newUID)
 	var pgErr *pgconn.PgError
 	if err != nil {
 		if errors.As(err, &pgErr) {
@@ -75,7 +75,7 @@ func main() {
 			log.Println("Error is not pqErr, ", err)
 		}
 	}
-	val, err := GetByUID(db, context.Background(), newUid)
+	val, err := GetByUID(db, context.Background(), newUID)
 	if err != nil {
 		log.Fatal(err)
 	}
