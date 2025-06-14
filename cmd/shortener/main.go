@@ -31,6 +31,7 @@ func main() {
 		jsonHandler  http.HandlerFunc
 		pingHandler  http.HandlerFunc
 		batchHandler http.HandlerFunc
+		userHandler  http.HandlerFunc
 	)
 
 	flag.Parse()
@@ -50,6 +51,7 @@ func main() {
 		jsonHandler = handlers.WithAuthHandlerWrapper(handlers.JSONHandler, s)
 		pingHandler = handlers.MakePingHandler(db)
 		batchHandler = handlers.WithAuthHandlerWrapper(handlers.BatchHandler, s)
+		userHandler = handlers.WithAuthHandlerWrapper(handlers.GetByUserHandler, s)
 	} else {
 
 		s, err := server.NewBasicStorage(*config.URLPrefix, *config.StorageFilePath)
@@ -61,6 +63,7 @@ func main() {
 		jsonHandler = handlers.WithAuthHandlerWrapper(handlers.JSONHandler, s)
 		pingHandler = handlers.MakePingHandler(nil)
 		batchHandler = handlers.WithAuthHandlerWrapper(handlers.BatchHandler, s)
+		userHandler = handlers.WithAuthHandlerWrapper(handlers.GetByUserHandler, s)
 		defer s.Close()
 	}
 
@@ -75,7 +78,7 @@ func main() {
 	}
 
 	r := server.MakeRouter(getHandler,
-		postHandler, jsonHandler, pingHandler, batchHandler,
+		postHandler, jsonHandler, pingHandler, batchHandler, userHandler,
 		logger, writerPool)
 	logger.Fatal(http.ListenAndServe(*config.ServerAddr, r).Error())
 }

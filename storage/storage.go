@@ -24,6 +24,11 @@ type ShortData struct {
 	ShortURL      string `json:"short_url"`
 }
 
+type URLPair struct {
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
+}
+
 type OriginalBatch = []OriginalData
 type ShortenedBatch = []ShortData
 
@@ -33,6 +38,7 @@ type URLStorage interface {
 	PutMany(context.Context, OriginalBatch, uuid.UUID) (ShortenedBatch, error)
 	GetMany(context.Context, ShortenedBatch) (OriginalBatch, error)
 	Contains(context.Context, uuid.UUID) (bool, error)
+	GetByUID(context.Context, uuid.UUID) ([]URLPair, error)
 }
 
 func MakeRandomString(n int) string {

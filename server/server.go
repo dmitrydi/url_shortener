@@ -21,15 +21,10 @@ import (
 
 // Storage
 
-type URLPair struct {
-	ShortURL    string
-	OriginalURL string
-}
-
 type BasicStorage struct {
 	rootPrefix string
 	data       map[string]string
-	idIndex    map[uuid.UUID][]URLPair
+	idIndex    map[uuid.UUID][]storage.URLPair
 	lastID     uint
 	persister  *storage.Persister
 }
@@ -42,7 +37,7 @@ func NewBasicStorage(rootPrefix string, persistPath string) (*BasicStorage, erro
 	}
 	ret.rootPrefix = rootPrefix
 	ret.data = make(map[string]string)
-	ret.idIndex = make(map[uuid.UUID][]URLPair)
+	ret.idIndex = make(map[uuid.UUID][]storage.URLPair)
 	p, err := storage.NewPersister(persistPath)
 	if err != nil {
 		return ret, err
@@ -97,7 +92,7 @@ func (stor *BasicStorage) Put(_ context.Context, initURL string, uid uuid.UUID) 
 		}
 	}
 	stor.data[randURL] = initURL
-	stor.idIndex[uid] = append(stor.idIndex[uid], URLPair{ShortURL: randURL, OriginalURL: initURL})
+	stor.idIndex[uid] = append(stor.idIndex[uid], storage.URLPair{ShortURL: randURL, OriginalURL: initURL})
 	stor.lastID += 1
 	if stor.persister != nil {
 		stor.persister.Add(stor.lastID, randURL, initURL, uid)
@@ -147,6 +142,11 @@ func (stor *BasicStorage) Contains(ctx context.Context, id uuid.UUID) (bool, err
 	return ok, nil
 }
 
+func (stor *BasicStorage) GetByUID(ctx context.Context, uid uuid.UUID) ([]storage.URLPair, error) {
+	res, _ := stor.idIndex[uid]
+	return res, nil
+}
+
 func (stor *BasicStorage) RemovePrefix(url string) string {
 	return strings.TrimPrefix(url, stor.rootPrefix)
 }
@@ -169,7 +169,7 @@ func (stor *BasicStorage) AddData(shortURL string, initURL string, uid uuid.UUID
 		return &DuplicateKeyError{ExistingKey: shortURL}
 	}
 	stor.data[shortURL] = initURL
-	stor.idIndex[uid] = append(stor.idIndex[uid], URLPair{ShortURL: shortURL, OriginalURL: initURL})
+	stor.idIndex[uid] = append(stor.idIndex[uid], storage.URLPair{ShortURL: shortURL, OriginalURL: initURL})
 	return nil
 }
 
@@ -177,6 +177,7 @@ func (stor *BasicStorage) AddData(shortURL string, initURL string, uid uuid.UUID
 
 func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
 	jsonHandler http.HandlerFunc, pingHandler http.HandlerFunc, batchHandler http.HandlerFunc,
+	userHandler http.HandlerFunc,
 	logger *zap.Logger, pl *sync.Pool) chi.Router {
 	r := chi.NewRouter()
 
@@ -188,6 +189,7 @@ func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
 		r.Post(`/`, postHandler)
 		r.Post(`/api/shorten`, jsonHandler)
 		r.Post(`/api/shorten/batch`, batchHandler)
+		r.Get(`/api/user/urls`, userHandler)
 	})
 	return r
 }

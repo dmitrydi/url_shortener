@@ -66,6 +66,21 @@ func (mr *MockURLStorageMockRecorder) Get(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockURLStorage)(nil).Get), arg0, arg1)
 }
 
+// GetByUID mocks base method.
+func (m *MockURLStorage) GetByUID(arg0 context.Context, arg1 uuid.UUID) ([]storage.URLPair, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByUID", arg0, arg1)
+	ret0, _ := ret[0].([]storage.URLPair)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByUID indicates an expected call of GetByUID.
+func (mr *MockURLStorageMockRecorder) GetByUID(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByUID", reflect.TypeOf((*MockURLStorage)(nil).GetByUID), arg0, arg1)
+}
+
 // GetMany mocks base method.
 func (m *MockURLStorage) GetMany(arg0 context.Context, arg1 []storage.ShortData) ([]storage.OriginalData, error) {
 	m.ctrl.T.Helper()
