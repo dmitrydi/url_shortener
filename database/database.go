@@ -129,6 +129,7 @@ func (d *DBStorage) GetByUID(ctx context.Context, uid uuid.UUID) ([]storage.URLP
 		if err != nil {
 			return nil, err
 		}
+		p.ShortURL = d.rootPrefix + p.ShortURL
 		result = append(result, p)
 	}
 
