@@ -27,9 +27,3 @@ func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, _
 		w.WriteHeader(http.StatusBadRequest)
 	}
 }
-
-// func MakeGetHandler(st storage.URLStorage) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		GetHandler(w, r, st)
-// 	}
-// }

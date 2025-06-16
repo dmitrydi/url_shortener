@@ -16,7 +16,7 @@ import (
 )
 
 func GetByUID(d *sql.DB, ctx context.Context, uid uuid.UUID) ([]storage.URLPair, error) {
-	rows, err := d.QueryContext(ctx, `SELECT (short_url, init_url) FROM urls_id WHERE uid = $1`, uid)
+	rows, err := d.QueryContext(ctx, `SELECT short_url, init_url FROM urls_id WHERE uid = $1`, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -80,4 +80,20 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println(val)
+	nu, err := uuid.Parse("de8e2436-bafc-44f9-a23c-ea197508e17b")
+	if err != nil {
+		log.Println("error parsing ", err)
+		return
+	}
+	v := "ddfg"
+	res, err := db.ExecContext(context.Background(), "UPDATE urls_id SET delete_flag=true WHERE short_url=$1 AND uid=$2", v, nu)
+	if err != nil {
+		log.Println("error sql ", err)
+		return
+	}
+	ra, err := res.RowsAffected()
+	if err != nil {
+		log.Println("error rows ", err)
+	}
+	log.Println("rows affected ", ra)
 }

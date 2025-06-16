@@ -28,7 +28,7 @@ func NewDBStorage(db *sql.DB, prefix string) (*DBStorage, error) {
 	res := DBStorage{db: db, rootPrefix: prefix}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS urls ("short_url" TEXT PRIMARY KEY, "init_url" TEXT UNIQUE NOT NULL, "uid" UUID)`)
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS urls ("short_url" TEXT PRIMARY KEY, "init_url" TEXT UNIQUE NOT NULL, "uid" UUID, "delete_flag" BOOLEAN NOT NULL DEFAULT false)`)
 	if err != nil {
 		return nil, err
 	}
@@ -96,12 +96,19 @@ func (d *DBStorage) PutMany(ctx context.Context, req storage.OriginalBatch, uid 
 }
 
 func (d *DBStorage) Get(ctx context.Context, shortURL string) (string, error) {
-	row := d.db.QueryRowContext(ctx, `SELECT (init_url) FROM urls WHERE short_url = $1`, shortURL)
+	row := d.db.QueryRowContext(ctx, `SELECT init_url, delete_flag FROM urls WHERE short_url = $1`, shortURL)
 	var initURL string
-	err := row.Scan(&initURL)
+	var deleted bool
+	err := row.Scan(&initURL, &deleted)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", storage.NewNoURLError(shortURL)
+		}
 		fmt.Println("Get error, ", err)
 		return "", err
+	}
+	if deleted {
+		return "", storage.NewNoURLError(shortURL)
 	}
 	return initURL, nil
 }
@@ -177,4 +184,59 @@ func (d *DBStorage) GetMany(ctx context.Context, req storage.ShortenedBatch) (st
 		idx++
 	}
 	return result, nil
+}
+
+type EmptyDataError struct {
+	Text string
+}
+
+func (e *EmptyDataError) Error() string {
+	return e.Text
+}
+
+func NewEmptyDataError(text string) *EmptyDataError {
+	return &EmptyDataError{Text: text}
+}
+
+type BadUserError struct {
+	InvalidUser string
+}
+
+func (e *BadUserError) Error() string {
+	return e.InvalidUser
+}
+
+func NewBadUserError(uid uuid.UUID) *BadUserError {
+	return &BadUserError{InvalidUser: uid.String()}
+}
+
+func (d *DBStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shortURLs []string) error {
+	numURLs := len(shortURLs)
+	if numURLs == 0 {
+		return NewEmptyDataError("empty input")
+	}
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	numMarked := 0
+	for _, shortURL := range shortURLs {
+		res, err := d.db.ExecContext(ctx, "UPDATE urls SET delete_flag=true WHERE short_url=$1 AND uid=$2", shortURL, uid)
+		if err != nil {
+			return err
+		}
+		ra, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		numMarked += int(ra)
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+	if numMarked != numURLs {
+		return NewBadUserError(uid)
+	}
+	return nil
 }

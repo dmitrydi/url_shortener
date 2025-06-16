@@ -21,9 +21,15 @@ import (
 
 // Storage
 
+type DataEntry struct {
+	originalURL string
+	uid         uuid.UUID
+	deleteFlag  bool
+}
+
 type BasicStorage struct {
 	rootPrefix string
-	data       map[string]string
+	data       map[string]DataEntry
 	idIndex    map[uuid.UUID][]storage.URLPair
 	lastID     uint
 	persister  *storage.Persister
@@ -36,7 +42,7 @@ func NewBasicStorage(rootPrefix string, persistPath string) (*BasicStorage, erro
 		rootPrefix += "/"
 	}
 	ret.rootPrefix = rootPrefix
-	ret.data = make(map[string]string)
+	ret.data = make(map[string]DataEntry)
 	ret.idIndex = make(map[uuid.UUID][]storage.URLPair)
 	p, err := storage.NewPersister(persistPath)
 	if err != nil {
@@ -53,7 +59,7 @@ func NewBasicStorage(rootPrefix string, persistPath string) (*BasicStorage, erro
 func MakeBasicStorage(rootPrefix string) BasicStorage {
 	var ret BasicStorage
 	ret.rootPrefix = rootPrefix
-	ret.data = make(map[string]string)
+	ret.data = make(map[string]DataEntry)
 	return ret
 }
 
@@ -91,7 +97,7 @@ func (stor *BasicStorage) Put(_ context.Context, initURL string, uid uuid.UUID) 
 			break
 		}
 	}
-	stor.data[randURL] = initURL
+	stor.data[randURL] = DataEntry{originalURL: initURL, uid: uid, deleteFlag: false}
 	stor.idIndex[uid] = append(stor.idIndex[uid], storage.URLPair{ShortURL: randURL, OriginalURL: initURL})
 	stor.lastID += 1
 	if stor.persister != nil {
@@ -107,10 +113,10 @@ func (stor *BasicStorage) Close() error {
 
 func (stor *BasicStorage) Get(_ context.Context, shortURL string) (string, error) {
 	val, ok := stor.data[shortURL]
-	if !ok {
-		return "", errors.New("url not exists")
+	if !ok || val.deleteFlag {
+		return "", storage.NewNoURLError(shortURL)
 	}
-	return val, nil
+	return val.originalURL, nil
 }
 
 func (stor *BasicStorage) GetMany(c context.Context, req storage.ShortenedBatch) (storage.OriginalBatch, error) {
@@ -168,8 +174,28 @@ func (stor *BasicStorage) AddData(shortURL string, initURL string, uid uuid.UUID
 	if ok {
 		return &DuplicateKeyError{ExistingKey: shortURL}
 	}
-	stor.data[shortURL] = initURL
+	stor.data[shortURL] = DataEntry{originalURL: initURL, uid: uid, deleteFlag: false}
 	stor.idIndex[uid] = append(stor.idIndex[uid], storage.URLPair{ShortURL: shortURL, OriginalURL: initURL})
+	return nil
+}
+
+func (stor *BasicStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shortURLs []string) error {
+	tSize := len(shortURLs)
+	deleted := 0
+	for _, su := range shortURLs {
+		val, ok := stor.data[su]
+		if !ok {
+			return errors.New("fuck")
+		}
+		if val.uid != uid {
+			return errors.New("fuck")
+		}
+		stor.data[su] = DataEntry{originalURL: val.originalURL, uid: val.uid, deleteFlag: true}
+		deleted++
+	}
+	if tSize != deleted {
+		return errors.New("fuck")
+	}
 	return nil
 }
 

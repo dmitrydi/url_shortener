@@ -32,6 +32,18 @@ type URLPair struct {
 type OriginalBatch = []OriginalData
 type ShortenedBatch = []ShortData
 
+type NoURLError struct {
+	ShortURL string
+}
+
+func (e *NoURLError) Error() string {
+	return e.ShortURL
+}
+
+func NewNoURLError(val string) *NoURLError {
+	return &NoURLError{ShortURL: val}
+}
+
 type URLStorage interface {
 	Put(context.Context, string, uuid.UUID) (string, error)
 	Get(context.Context, string) (string, error)
@@ -39,6 +51,7 @@ type URLStorage interface {
 	GetMany(context.Context, ShortenedBatch) (OriginalBatch, error)
 	Contains(context.Context, uuid.UUID) (bool, error)
 	GetByUID(context.Context, uuid.UUID) ([]URLPair, error)
+	MarkAsDeleted(context.Context, uuid.UUID, []string) error
 }
 
 func MakeRandomString(n int) string {
