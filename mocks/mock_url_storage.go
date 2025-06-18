@@ -10,6 +10,7 @@ import (
 
 	storage "github.com/dmitrydi/url_shortener/storage"
 	gomock "github.com/golang/mock/gomock"
+	uuid "github.com/google/uuid"
 )
 
 // MockURLStorage is a mock of URLStorage interface.
@@ -35,6 +36,35 @@ func (m *MockURLStorage) EXPECT() *MockURLStorageMockRecorder {
 	return m.recorder
 }
 
+// Contains mocks base method.
+func (m *MockURLStorage) Contains(arg0 context.Context, arg1 uuid.UUID) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Contains", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Contains indicates an expected call of Contains.
+func (mr *MockURLStorageMockRecorder) Contains(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Contains", reflect.TypeOf((*MockURLStorage)(nil).Contains), arg0, arg1)
+}
+
+// Delete mocks base method.
+func (m *MockURLStorage) Delete(arg0 context.Context, arg1 []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockURLStorageMockRecorder) Delete(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockURLStorage)(nil).Delete), arg0, arg1)
+}
+
 // Get mocks base method.
 func (m *MockURLStorage) Get(arg0 context.Context, arg1 string) (string, error) {
 	m.ctrl.T.Helper()
@@ -48,6 +78,21 @@ func (m *MockURLStorage) Get(arg0 context.Context, arg1 string) (string, error) 
 func (mr *MockURLStorageMockRecorder) Get(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockURLStorage)(nil).Get), arg0, arg1)
+}
+
+// GetByUID mocks base method.
+func (m *MockURLStorage) GetByUID(arg0 context.Context, arg1 uuid.UUID) ([]storage.URLPair, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByUID", arg0, arg1)
+	ret0, _ := ret[0].([]storage.URLPair)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByUID indicates an expected call of GetByUID.
+func (mr *MockURLStorageMockRecorder) GetByUID(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByUID", reflect.TypeOf((*MockURLStorage)(nil).GetByUID), arg0, arg1)
 }
 
 // GetMany mocks base method.
@@ -65,32 +110,46 @@ func (mr *MockURLStorageMockRecorder) GetMany(arg0, arg1 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMany", reflect.TypeOf((*MockURLStorage)(nil).GetMany), arg0, arg1)
 }
 
-// Put mocks base method.
-func (m *MockURLStorage) Put(arg0 context.Context, arg1 string) (string, error) {
+// MarkAsDeleted mocks base method.
+func (m *MockURLStorage) MarkAsDeleted(arg0 context.Context, arg1 uuid.UUID, arg2 []string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Put", arg0, arg1)
+	ret := m.ctrl.Call(m, "MarkAsDeleted", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkAsDeleted indicates an expected call of MarkAsDeleted.
+func (mr *MockURLStorageMockRecorder) MarkAsDeleted(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAsDeleted", reflect.TypeOf((*MockURLStorage)(nil).MarkAsDeleted), arg0, arg1, arg2)
+}
+
+// Put mocks base method.
+func (m *MockURLStorage) Put(arg0 context.Context, arg1 string, arg2 uuid.UUID) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Put", arg0, arg1, arg2)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Put indicates an expected call of Put.
-func (mr *MockURLStorageMockRecorder) Put(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockURLStorageMockRecorder) Put(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockURLStorage)(nil).Put), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockURLStorage)(nil).Put), arg0, arg1, arg2)
 }
 
 // PutMany mocks base method.
-func (m *MockURLStorage) PutMany(arg0 context.Context, arg1 []storage.OriginalData) ([]storage.ShortData, error) {
+func (m *MockURLStorage) PutMany(arg0 context.Context, arg1 []storage.OriginalData, arg2 uuid.UUID) ([]storage.ShortData, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutMany", arg0, arg1)
+	ret := m.ctrl.Call(m, "PutMany", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]storage.ShortData)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // PutMany indicates an expected call of PutMany.
-func (mr *MockURLStorageMockRecorder) PutMany(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockURLStorageMockRecorder) PutMany(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutMany", reflect.TypeOf((*MockURLStorage)(nil).PutMany), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutMany", reflect.TypeOf((*MockURLStorage)(nil).PutMany), arg0, arg1, arg2)
 }

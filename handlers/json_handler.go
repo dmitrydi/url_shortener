@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/dmitrydi/url_shortener/authorization"
 	"github.com/dmitrydi/url_shortener/database"
 	"github.com/dmitrydi/url_shortener/middleware"
 	"github.com/dmitrydi/url_shortener/storage"
@@ -20,7 +21,7 @@ type JSONResp struct {
 	Result string `json:"result"`
 }
 
-func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) {
+func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, ua authorization.UserAuth) {
 	defer r.Body.Close()
 	reader, err := middleware.MakeDecompReader(r)
 	if err != nil {
@@ -42,7 +43,7 @@ func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 		return
 	}
 	var resp = JSONResp{}
-	resp.Result, err = st.Put(r.Context(), req.URL)
+	resp.Result, err = st.Put(r.Context(), req.URL, ua.UID)
 	var status int
 	if err != nil {
 		var dupErr *database.DuplicateError
@@ -68,8 +69,8 @@ func JSONHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage) 
 	w.Write(respJSON)
 }
 
-func MakeJSONHandler(st storage.URLStorage) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		JSONHandler(w, r, st)
-	}
-}
+// func MakeJSONHandler(st storage.URLStorage) http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		JSONHandler(w, r, st)
+// 	}
+// }

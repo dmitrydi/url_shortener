@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/dmitrydi/url_shortener/authorization"
 	"github.com/dmitrydi/url_shortener/mocks"
 	"github.com/dmitrydi/url_shortener/storage"
 	"github.com/golang/mock/gomock"
@@ -64,7 +65,7 @@ func TestGetHandler(t *testing.T) {
 			}
 
 			r := httptest.NewRecorder()
-			GetHandler(r, getRequest, m)
+			GetHandler(r, getRequest, m, authorization.UserAuth{})
 			getRes := r.Result()
 			defer getRes.Body.Close()
 			assert.Equal(t, test.want.getCode, getRes.StatusCode, "invalid response code")
@@ -91,14 +92,14 @@ func TestBatchHandlerOK(t *testing.T) {
 	}
 
 	m := mocks.NewMockURLStorage(ctrl)
-	m.EXPECT().PutMany(gomock.Any(), reqData).Return(putResult, nil)
+	m.EXPECT().PutMany(gomock.Any(), reqData, gomock.Any()).Return(putResult, nil)
 
 	bt, err := json.Marshal(reqData)
 	require.NoError(t, err, "json error")
 	req, err := http.NewRequest(http.MethodPost, "/api/shorten/batch", bytes.NewBuffer(bt))
 	require.NoError(t, err, "http request error")
 	r := httptest.NewRecorder()
-	BatchHandler(r, req, m)
+	BatchHandler(r, req, m, authorization.UserAuth{})
 	res := r.Result()
 
 	// базовая проверка
