@@ -236,6 +236,7 @@ func (d *DBStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shortURLs 
 		return err
 	}
 	if numMarked != numURLs {
+		tx.Rollback()
 		return NewBadUserError(uid)
 	}
 	return nil

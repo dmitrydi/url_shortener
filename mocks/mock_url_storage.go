@@ -96,6 +96,20 @@ func (mr *MockURLStorageMockRecorder) GetMany(arg0, arg1 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMany", reflect.TypeOf((*MockURLStorage)(nil).GetMany), arg0, arg1)
 }
 
+// MarkAsDeleted mocks base method.
+func (m *MockURLStorage) MarkAsDeleted(arg0 context.Context, arg1 uuid.UUID, arg2 []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkAsDeleted", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkAsDeleted indicates an expected call of MarkAsDeleted.
+func (mr *MockURLStorageMockRecorder) MarkAsDeleted(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAsDeleted", reflect.TypeOf((*MockURLStorage)(nil).MarkAsDeleted), arg0, arg1, arg2)
+}
+
 // Put mocks base method.
 func (m *MockURLStorage) Put(arg0 context.Context, arg1 string, arg2 uuid.UUID) (string, error) {
 	m.ctrl.T.Helper()
