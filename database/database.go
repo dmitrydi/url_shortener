@@ -232,11 +232,11 @@ func (d *DBStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shortURLs 
 		}
 		numMarked += int(ra)
 	}
-	if numMarked != numURLs {
-		log.Println("numMarked != numURLs ", numMarked, numURLs)
-		tx.Rollback()
-		return NewBadUserError(uid)
-	}
+	// if numMarked != numURLs {
+	// 	log.Println("numMarked != numURLs ", numMarked, numURLs)
+	// 	tx.Rollback()
+	// 	return NewBadUserError(uid)
+	// }
 	err = tx.Commit()
 	if err != nil {
 		return err
