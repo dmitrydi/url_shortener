@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"os"
 	"sync"
@@ -180,26 +179,23 @@ func (stor *BasicStorage) AddData(shortURL string, initURL string, uid uuid.UUID
 }
 
 func (stor *BasicStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shortURLs []string) error {
-	tSize := len(shortURLs)
-	deleted := 0
 	for _, su := range shortURLs {
 		val, ok := stor.data[su]
 		if !ok {
-			return errors.New("no data")
+			continue
 		}
 		if val.uid != uid {
-			return errors.New("bad uid")
+			continue
 		}
 		stor.data[su] = DataEntry{originalURL: val.originalURL, uid: val.uid, deleteFlag: true}
-		deleted++
-	}
-	if tSize != deleted {
-		return errors.New("fuck")
 	}
 	return nil
 }
 
-func (stor *BasicStorage) Delete(context.Context, []string) error {
+func (stor *BasicStorage) Delete(ctx context.Context, shortURLs []string) error {
+	for _, shortURL := range shortURLs {
+		delete(stor.data, shortURL)
+	}
 	return nil
 }
 

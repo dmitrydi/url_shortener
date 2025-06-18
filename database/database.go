@@ -199,18 +199,6 @@ func NewEmptyDataError(text string) *EmptyDataError {
 	return &EmptyDataError{Text: text}
 }
 
-type BadUserError struct {
-	InvalidUser string
-}
-
-func (e *BadUserError) Error() string {
-	return e.InvalidUser
-}
-
-func NewBadUserError(uid uuid.UUID) *BadUserError {
-	return &BadUserError{InvalidUser: uid.String()}
-}
-
 func (d *DBStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shortURLs []string) error {
 	numURLs := len(shortURLs)
 	if numURLs == 0 {
@@ -220,23 +208,13 @@ func (d *DBStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shortURLs 
 	if err != nil {
 		return err
 	}
-	numMarked := 0
+
 	for _, shortURL := range shortURLs {
-		res, err := d.db.ExecContext(ctx, "UPDATE urls SET delete_flag=true WHERE short_url=$1 AND uid=$2", shortURL, uid)
+		_, err := d.db.ExecContext(ctx, "UPDATE urls SET delete_flag=true WHERE short_url=$1 AND uid=$2", shortURL, uid)
 		if err != nil {
 			return err
 		}
-		ra, err := res.RowsAffected()
-		if err != nil {
-			return err
-		}
-		numMarked += int(ra)
 	}
-	// if numMarked != numURLs {
-	// 	log.Println("numMarked != numURLs ", numMarked, numURLs)
-	// 	tx.Rollback()
-	// 	return NewBadUserError(uid)
-	// }
 	err = tx.Commit()
 	if err != nil {
 		return err
