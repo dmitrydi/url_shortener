@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -24,6 +25,11 @@ func GetHandler(w http.ResponseWriter, r *http.Request, st storage.URLStorage, _
 		w.Header().Set("Location", res)
 		w.WriteHeader(http.StatusTemporaryRedirect)
 	} else {
+		noURL := storage.NewNoURLError(url[1])
+		if errors.As(err, &noURL) {
+			w.WriteHeader(http.StatusGone)
+			return
+		}
 		w.WriteHeader(http.StatusBadRequest)
 	}
 }

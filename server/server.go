@@ -185,10 +185,10 @@ func (stor *BasicStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shor
 	for _, su := range shortURLs {
 		val, ok := stor.data[su]
 		if !ok {
-			return errors.New("fuck")
+			return errors.New("no data")
 		}
 		if val.uid != uid {
-			return errors.New("fuck")
+			return errors.New("bad uid")
 		}
 		stor.data[su] = DataEntry{originalURL: val.originalURL, uid: val.uid, deleteFlag: true}
 		deleted++
@@ -199,11 +199,15 @@ func (stor *BasicStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shor
 	return nil
 }
 
+func (stor *BasicStorage) Delete(context.Context, []string) error {
+	return nil
+}
+
 // Builder
 
 func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
 	jsonHandler http.HandlerFunc, pingHandler http.HandlerFunc, batchHandler http.HandlerFunc,
-	userHandler http.HandlerFunc,
+	userHandler http.HandlerFunc, deleteHandler http.HandlerFunc,
 	logger *zap.Logger, pl *sync.Pool) chi.Router {
 	r := chi.NewRouter()
 
@@ -216,6 +220,7 @@ func MakeRouter(getHandler http.HandlerFunc, postHandler http.HandlerFunc,
 		r.Post(`/api/shorten`, jsonHandler)
 		r.Post(`/api/shorten/batch`, batchHandler)
 		r.Get(`/api/user/urls`, userHandler)
+		r.Delete(`/api/user/urls`, deleteHandler)
 	})
 	return r
 }

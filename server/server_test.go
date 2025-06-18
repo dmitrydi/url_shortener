@@ -160,7 +160,7 @@ func TestGetHandler(t *testing.T) {
 			getMethod: http.MethodGet,
 			want: want{
 				putCode: 400,
-				getCode: 400,
+				getCode: http.StatusGone,
 			},
 		},
 	}
@@ -422,7 +422,9 @@ func TestRouterCompressDB(t *testing.T) {
 	pingHandler := handlers.MakePingHandler(db)
 	batchHandler := handlers.WithAuthHandlerWrapper(handlers.BatchHandler, tstorage)
 	userHandler := handlers.WithAuthHandlerWrapper(handlers.GetByUserHandler, tstorage)
-	tserver := httptest.NewServer(MakeRouter(getHandler, postHandler, jsonHandler, pingHandler, batchHandler, userHandler, logger, writerPool))
+	deleteHandler := handlers.WithAuthHandlerWrapper(handlers.DeleteAsyncHandler, tstorage)
+	tserver := httptest.NewServer(MakeRouter(getHandler,
+		postHandler, jsonHandler, pingHandler, batchHandler, userHandler, deleteHandler, logger, writerPool))
 	defer tserver.Close()
 	req := makeJSONRequest(t, http.MethodPost, tserver.URL+"/api/shorten", initURL)
 	resp, err := tserver.Client().Do(req)

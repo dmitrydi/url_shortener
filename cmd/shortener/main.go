@@ -59,6 +59,7 @@ func main() {
 	pingHandler := handlers.MakePingHandler(db)
 	batchHandler := handlers.WithAuthHandlerWrapper(handlers.BatchHandler, s)
 	userHandler := handlers.WithAuthHandlerWrapper(handlers.GetByUserHandler, s)
+	deleteHandler := handlers.WithAuthHandlerWrapper(handlers.DeleteAsyncHandler, s)
 
 	writerPool := &sync.Pool{
 		New: func() any {
@@ -71,7 +72,7 @@ func main() {
 	}
 
 	r := server.MakeRouter(getHandler,
-		postHandler, jsonHandler, pingHandler, batchHandler, userHandler,
+		postHandler, jsonHandler, pingHandler, batchHandler, userHandler, deleteHandler,
 		logger, writerPool)
 	logger.Fatal(http.ListenAndServe(*config.ServerAddr, r).Error())
 }

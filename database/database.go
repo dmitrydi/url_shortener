@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -231,13 +232,33 @@ func (d *DBStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shortURLs 
 		}
 		numMarked += int(ra)
 	}
+	if numMarked != numURLs {
+		log.Println("numMarked != numURLs ", numMarked, numURLs)
+		tx.Rollback()
+		return NewBadUserError(uid)
+	}
 	err = tx.Commit()
 	if err != nil {
 		return err
 	}
-	if numMarked != numURLs {
-		tx.Rollback()
-		return NewBadUserError(uid)
+
+	return nil
+}
+
+func (d *DBStorage) Delete(ctx context.Context, shortURLs []string) error {
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	for _, shortURL := range shortURLs {
+		_, err = d.db.ExecContext(ctx, "DELETE FROM urls WHERE short_url = $1", shortURL)
+		if err != nil {
+			return err
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
 	}
 	return nil
 }

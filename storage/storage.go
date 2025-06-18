@@ -52,6 +52,7 @@ type URLStorage interface {
 	Contains(context.Context, uuid.UUID) (bool, error)
 	GetByUID(context.Context, uuid.UUID) ([]URLPair, error)
 	MarkAsDeleted(context.Context, uuid.UUID, []string) error
+	Delete(context.Context, []string) error
 }
 
 func MakeRandomString(n int) string {

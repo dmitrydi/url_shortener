@@ -51,6 +51,20 @@ func (mr *MockURLStorageMockRecorder) Contains(arg0, arg1 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Contains", reflect.TypeOf((*MockURLStorage)(nil).Contains), arg0, arg1)
 }
 
+// Delete mocks base method.
+func (m *MockURLStorage) Delete(arg0 context.Context, arg1 []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockURLStorageMockRecorder) Delete(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockURLStorage)(nil).Delete), arg0, arg1)
+}
+
 // Get mocks base method.
 func (m *MockURLStorage) Get(arg0 context.Context, arg1 string) (string, error) {
 	m.ctrl.T.Helper()
