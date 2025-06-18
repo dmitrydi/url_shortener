@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/dmitrydi/url_shortener/authorization"
@@ -32,4 +34,14 @@ func DeleteAsyncHandler(w http.ResponseWriter, r *http.Request, st storage.URLSt
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	err = st.MarkAsDeleted(r.Context(), ua.UID, urls)
+	if err != nil {
+		log.Println("error of MarkAsDeleted")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	} else {
+		//log.Println("no error MarkAsDeleted ", err)
+	}
+	go st.Delete(context.Background(), urls)
+	w.WriteHeader(http.StatusAccepted)
 }

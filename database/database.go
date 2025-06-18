@@ -246,6 +246,7 @@ func (d *DBStorage) MarkAsDeleted(ctx context.Context, uid uuid.UUID, shortURLs 
 }
 
 func (d *DBStorage) Delete(ctx context.Context, shortURLs []string) error {
+	log.Println("Start goroutine Delete, len of urls ", len(shortURLs))
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -253,11 +254,13 @@ func (d *DBStorage) Delete(ctx context.Context, shortURLs []string) error {
 	for _, shortURL := range shortURLs {
 		_, err = d.db.ExecContext(ctx, "DELETE FROM urls WHERE short_url = $1", shortURL)
 		if err != nil {
+			log.Println("ExecContext error ", err)
 			return err
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
+		log.Println("Commit error ", err)
 		return err
 	}
 	return nil
